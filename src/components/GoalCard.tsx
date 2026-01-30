@@ -52,8 +52,8 @@ export function GoalCard({ item, type, onClick }: GoalCardProps) {
     <button
       onClick={onClick}
       className={cn(
-        'w-full p-4 card-soft flex items-center gap-4 text-left',
-        'transition-all duration-200 hover:shadow-soft-lg active:scale-[0.99]'
+        'w-full p-4 bg-card border border-border rounded-2xl flex items-center gap-4 text-left',
+        'transition-all duration-200 hover:shadow-soft hover:border-transparent active:scale-[0.99]'
       )}
     >
       <ProgressRing 
