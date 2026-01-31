@@ -50,6 +50,8 @@ export function Dashboard() {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<PeriodicExpense | null>(null);
 
+  const [externalIncomeCategory, setExternalIncomeCategory] = useState<string | undefined>(undefined);
+
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -63,6 +65,11 @@ export function Dashboard() {
     } else {
       setActiveSheet(action);
     }
+  };
+
+  const handleAddFunds = (categoryId: string) => {
+    setExternalIncomeCategory(categoryId);
+    setActiveSheet('external-income');
   };
 
   const handleIncomeSubmit = (data: {
@@ -293,6 +300,7 @@ export function Dashboard() {
                       totalBudget={budget.totalBalance}
                       availableAmount={category.id === 'fixed' ? budget.getFixedSurplus() : undefined}
                       onClick={() => setActiveSheet('transfer')}
+                      onAddFunds={category.id === 'savings' ? () => handleAddFunds('savings') : undefined}
                     />
                   ))}
                 </div>

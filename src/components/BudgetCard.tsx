@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { Plus } from 'lucide-react';
 import type { BudgetCategory } from '@/hooks/useBudget';
 
 interface BudgetCardProps {
@@ -7,6 +8,7 @@ interface BudgetCardProps {
   totalBudget: number;
   availableAmount?: number;
   onClick?: () => void;
+  onAddFunds?: () => void;
 }
 
 const categoryStyles = {
@@ -33,25 +35,42 @@ const categoryLabels = {
   variable: 'Disponible',
 };
 
-export function BudgetCard({ category, totalBudget, availableAmount, onClick }: BudgetCardProps) {
+export function BudgetCard({ category, totalBudget, availableAmount, onClick, onAddFunds }: BudgetCardProps) {
   const styles = categoryStyles[category.type];
   const label = categoryLabels[category.type];
   const percentage = totalBudget > 0 ? (category.amount / totalBudget) * 100 : 0;
 
   return (
-    <button
+    <div
       onClick={onClick}
       className={cn(
-        'w-full p-5 rounded-3xl text-left transition-all duration-200',
+        'w-full p-5 rounded-3xl text-left transition-all duration-200 cursor-pointer relative group',
         'hover:scale-[1.02] hover:shadow-soft-lg active:scale-[0.98]',
         styles.bg
       )}
     >
       <div className="flex items-center justify-between mb-4">
         <span className="text-label">{category.nameEs}</span>
-        <span className={cn('text-xs font-medium', styles.text)}>
-          {category.percentage}%
-        </span>
+        <div className="flex items-center gap-2">
+          {onAddFunds && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddFunds();
+              }}
+              className={cn(
+                "p-1.5 rounded-full bg-white/30 hover:bg-white/80 transition-colors shadow-sm",
+                styles.text
+              )}
+              title="Ingresar fondos"
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={3} />
+            </button>
+          )}
+          <span className={cn('text-xs font-medium', styles.text)}>
+            {category.percentage}%
+          </span>
+        </div>
       </div>
 
       <div className="mb-3">
@@ -76,6 +95,6 @@ export function BudgetCard({ category, totalBudget, availableAmount, onClick }: 
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 }
