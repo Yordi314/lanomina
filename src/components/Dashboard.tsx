@@ -6,7 +6,9 @@ import { ActionSheet } from './ActionSheet';
 import { IncomeWizard } from './IncomeWizard';
 import { TransferSheet } from './TransferSheet';
 import { EmptyState } from './EmptyState';
-import { useBudget } from '@/hooks/useBudget';
+import { GoalFormModal } from './GoalFormModal';
+import { PeriodicExpenseFormModal } from './PeriodicExpenseFormModal';
+import { useBudget, Goal, PeriodicExpense } from '@/hooks/useBudget';
 import { 
   User, Target, CalendarClock, ChevronRight, Plus, 
   LayoutDashboard, Wallet, ArrowRightLeft, History,
@@ -15,7 +17,8 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type SheetType = 'actions' | 'income' | 'transfer' | 'goal' | 'periodic' | null;
+type SheetType = 'actions' | 'income' | 'transfer' | null;
+type ModalType = 'goal' | 'periodic' | null;
 type TabType = 'overview' | 'goals' | 'periodic' | 'history';
 
 const navItems = [
@@ -28,10 +31,18 @@ const navItems = [
 export function Dashboard() {
   const budget = useBudget();
   const [activeSheet, setActiveSheet] = useState<SheetType>(null);
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<PeriodicExpense | null>(null);
 
   const handleAction = (action: 'income' | 'transfer' | 'goal' | 'periodic') => {
-    setActiveSheet(action);
+    if (action === 'goal' || action === 'periodic') {
+      setActiveSheet(null);
+      setActiveModal(action);
+    } else {
+      setActiveSheet(action);
+    }
   };
 
   const handleIncomeSubmit = (data: {
@@ -53,6 +64,26 @@ export function Dashboard() {
 
   const handleTransfer = (fromId: string, toId: string, amount: number) => {
     budget.transferBetweenCategories(fromId, toId, amount);
+  };
+
+  const handleGoalClick = (goal: Goal) => {
+    setSelectedGoal(goal);
+    setActiveModal('goal');
+  };
+
+  const handleExpenseClick = (expense: PeriodicExpense) => {
+    setSelectedExpense(expense);
+    setActiveModal('periodic');
+  };
+
+  const handleCloseGoalModal = () => {
+    setActiveModal(null);
+    setSelectedGoal(null);
+  };
+
+  const handleCloseExpenseModal = () => {
+    setActiveModal(null);
+    setSelectedExpense(null);
   };
 
   const upcomingExpenses = budget.periodicExpenses
@@ -182,7 +213,10 @@ export function Dashboard() {
                       {formatCurrency(budget.totalBalance)}
                     </h2>
                     <p className="text-caption mt-2">
-                      Última actualización: Hoy, {new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}
+                      {budget.incomeHistory.length > 0 
+                        ? `Última actualización: ${budget.incomeHistory[0].date.toLocaleDateString('es-DO')}`
+                        : 'Registra tu primera quincena para comenzar'
+                      }
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -229,7 +263,12 @@ export function Dashboard() {
                   {budget.goals.length > 0 ? (
                     <div className="space-y-3">
                       {budget.goals.slice(0, 2).map(goal => (
-                        <GoalCard key={goal.id} item={goal} type="goal" />
+                        <GoalCard 
+                          key={goal.id} 
+                          item={goal} 
+                          type="goal" 
+                          onClick={() => handleGoalClick(goal)}
+                        />
                       ))}
                     </div>
                   ) : (
@@ -255,7 +294,12 @@ export function Dashboard() {
                   {upcomingExpenses.length > 0 ? (
                     <div className="space-y-3">
                       {upcomingExpenses.map(expense => (
-                        <GoalCard key={expense.id} item={expense} type="periodic" />
+                        <GoalCard 
+                          key={expense.id} 
+                          item={expense} 
+                          type="periodic" 
+                          onClick={() => handleExpenseClick(expense)}
+                        />
                       ))}
                     </div>
                   ) : (
@@ -277,16 +321,21 @@ export function Dashboard() {
                   <h2 className="text-headline">Metas de Ahorro</h2>
                   <p className="text-caption">Subdivisión del 30% (Futuro)</p>
                 </div>
-                <Button onClick={() => setActiveSheet('goal')} className="gap-2">
+                <Button onClick={() => setActiveModal('goal')} className="gap-2">
                   <Plus className="w-4 h-4" />
                   Nueva Meta
                 </Button>
               </div>
               
               {budget.goals.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                   {budget.goals.map(goal => (
-                    <GoalCard key={goal.id} item={goal} type="goal" />
+                    <GoalCard 
+                      key={goal.id} 
+                      item={goal} 
+                      type="goal" 
+                      onClick={() => handleGoalClick(goal)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -296,6 +345,12 @@ export function Dashboard() {
                     title="Aún no hay metas"
                     description="Diseñemos tu futuro. Crea tu primera meta de ahorro."
                   />
+                  <div className="flex justify-center pb-8">
+                    <Button onClick={() => setActiveModal('goal')} className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Crear mi primera meta
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -308,16 +363,21 @@ export function Dashboard() {
                   <h2 className="text-headline">Gastos Periódicos</h2>
                   <p className="text-caption">Sinking Funds - Anticipa gastos grandes</p>
                 </div>
-                <Button onClick={() => setActiveSheet('periodic')} className="gap-2">
+                <Button onClick={() => setActiveModal('periodic')} className="gap-2">
                   <Plus className="w-4 h-4" />
                   Nuevo Gasto
                 </Button>
               </div>
               
               {budget.periodicExpenses.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                   {budget.periodicExpenses.map(expense => (
-                    <GoalCard key={expense.id} item={expense} type="periodic" />
+                    <GoalCard 
+                      key={expense.id} 
+                      item={expense} 
+                      type="periodic" 
+                      onClick={() => handleExpenseClick(expense)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -327,6 +387,12 @@ export function Dashboard() {
                     title="Sin gastos periódicos"
                     description="Anticipa tus gastos grandes. Universidad, mantenimiento, seguros..."
                   />
+                  <div className="flex justify-center pb-8">
+                    <Button onClick={() => setActiveModal('periodic')} className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Crear mi primer gasto
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -373,6 +439,12 @@ export function Dashboard() {
                     title="Sin historial"
                     description="Aquí aparecerán tus quincenas registradas"
                   />
+                  <div className="flex justify-center pb-8">
+                    <Button onClick={() => setActiveSheet('income')} className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Registrar primera quincena
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -412,6 +484,25 @@ export function Dashboard() {
           onTransfer={handleTransfer}
         />
       )}
+
+      {/* Modals */}
+      <GoalFormModal
+        open={activeModal === 'goal'}
+        onClose={handleCloseGoalModal}
+        onSave={budget.addGoal}
+        onUpdate={budget.updateGoal}
+        onDelete={budget.deleteGoal}
+        goal={selectedGoal}
+      />
+
+      <PeriodicExpenseFormModal
+        open={activeModal === 'periodic'}
+        onClose={handleCloseExpenseModal}
+        onSave={budget.addPeriodicExpense}
+        onUpdate={budget.updatePeriodicExpense}
+        onDelete={budget.deletePeriodicExpense}
+        expense={selectedExpense}
+      />
     </div>
   );
 }

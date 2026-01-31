@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 export interface BudgetCategory {
   id: string;
@@ -43,38 +43,70 @@ export interface BudgetState {
   incomeHistory: Income[];
 }
 
+const STORAGE_KEY = 'minomina_budget_state';
+
 const initialCategories: BudgetCategory[] = [
   { id: 'fixed', name: 'Fixed', nameEs: 'Fijos', percentage: 50, amount: 0, type: 'fixed' },
   { id: 'savings', name: 'Future', nameEs: 'Futuro', percentage: 30, amount: 0, type: 'savings' },
   { id: 'variable', name: 'Lifestyle', nameEs: 'Lifestyle', percentage: 20, amount: 0, type: 'variable' },
 ];
 
-const initialGoals: Goal[] = [
-  { id: 'emergency', name: 'Fondo de Emergencia', targetAmount: 100000, currentAmount: 45000, allocationPercentage: 40 },
-  { id: 'travel', name: 'Viaje', targetAmount: 50000, currentAmount: 12000, allocationPercentage: 60 },
-];
+const getInitialState = (): BudgetState => {
+  if (typeof window === 'undefined') {
+    return {
+      totalBalance: 0,
+      categories: initialCategories,
+      goals: [],
+      periodicExpenses: [],
+      incomeHistory: [],
+    };
+  }
 
-const initialPeriodicExpenses: PeriodicExpense[] = [
-  { id: 'university', name: 'Universidad', targetAmount: 35000, currentAmount: 22000, dueDate: new Date('2025-03-15'), frequency: 'quarterly' },
-  { id: 'car', name: 'Mantenimiento Carro', targetAmount: 15000, currentAmount: 8500, dueDate: new Date('2025-02-28'), frequency: 'quarterly' },
-];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Convert date strings back to Date objects
+      return {
+        ...parsed,
+        goals: parsed.goals.map((g: Goal) => ({
+          ...g,
+          dueDate: g.dueDate ? new Date(g.dueDate) : undefined,
+        })),
+        periodicExpenses: parsed.periodicExpenses.map((e: PeriodicExpense) => ({
+          ...e,
+          dueDate: new Date(e.dueDate),
+        })),
+        incomeHistory: parsed.incomeHistory.map((i: Income) => ({
+          ...i,
+          date: new Date(i.date),
+        })),
+      };
+    }
+  } catch (error) {
+    console.error('Error loading budget state:', error);
+  }
 
-const initialIncomeHistory: Income[] = [
-  { id: '1', date: new Date('2025-01-15'), concept: 'Nómina 1ra Quincena', amount: 42000, includesGas: true },
-  { id: '2', date: new Date('2025-01-01'), concept: 'Nómina 2da Quincena', amount: 40000, includesGas: false },
-];
+  return {
+    totalBalance: 0,
+    categories: initialCategories,
+    goals: [],
+    periodicExpenses: [],
+    incomeHistory: [],
+  };
+};
 
 export function useBudget() {
-  const [state, setState] = useState<BudgetState>({
-    totalBalance: 65400,
-    categories: initialCategories.map((cat, i) => ({
-      ...cat,
-      amount: i === 0 ? 32700 : i === 1 ? 19620 : 13080,
-    })),
-    goals: initialGoals,
-    periodicExpenses: initialPeriodicExpenses,
-    incomeHistory: initialIncomeHistory,
-  });
+  const [state, setState] = useState<BudgetState>(getInitialState);
+
+  // Persist state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error saving budget state:', error);
+    }
+  }, [state]);
 
   const addIncome = useCallback((income: Omit<Income, 'id'>, distribution: { fixed: number; savings: number; variable: number }) => {
     setState(prev => {
@@ -169,10 +201,42 @@ export function useBudget() {
     }));
   }, []);
 
+  const updateGoal = useCallback((goalId: string, updates: Partial<Omit<Goal, 'id'>>) => {
+    setState(prev => ({
+      ...prev,
+      goals: prev.goals.map(goal =>
+        goal.id === goalId ? { ...goal, ...updates } : goal
+      ),
+    }));
+  }, []);
+
+  const deleteGoal = useCallback((goalId: string) => {
+    setState(prev => ({
+      ...prev,
+      goals: prev.goals.filter(goal => goal.id !== goalId),
+    }));
+  }, []);
+
   const addPeriodicExpense = useCallback((expense: Omit<PeriodicExpense, 'id' | 'currentAmount'>) => {
     setState(prev => ({
       ...prev,
       periodicExpenses: [...prev.periodicExpenses, { ...expense, id: Date.now().toString(), currentAmount: 0 }],
+    }));
+  }, []);
+
+  const updatePeriodicExpense = useCallback((expenseId: string, updates: Partial<Omit<PeriodicExpense, 'id'>>) => {
+    setState(prev => ({
+      ...prev,
+      periodicExpenses: prev.periodicExpenses.map(expense =>
+        expense.id === expenseId ? { ...expense, ...updates } : expense
+      ),
+    }));
+  }, []);
+
+  const deletePeriodicExpense = useCallback((expenseId: string) => {
+    setState(prev => ({
+      ...prev,
+      periodicExpenses: prev.periodicExpenses.filter(expense => expense.id !== expenseId),
     }));
   }, []);
 
@@ -183,6 +247,10 @@ export function useBudget() {
     fundGoal,
     fundPeriodicExpense,
     addGoal,
+    updateGoal,
+    deleteGoal,
     addPeriodicExpense,
+    updatePeriodicExpense,
+    deletePeriodicExpense,
   };
 }
