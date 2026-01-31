@@ -5,6 +5,7 @@ import type { BudgetCategory } from '@/hooks/useBudget';
 interface BudgetCardProps {
   category: BudgetCategory;
   totalBudget: number;
+  availableAmount?: number;
   onClick?: () => void;
 }
 
@@ -32,7 +33,7 @@ const categoryLabels = {
   variable: 'Disponible',
 };
 
-export function BudgetCard({ category, totalBudget, onClick }: BudgetCardProps) {
+export function BudgetCard({ category, totalBudget, availableAmount, onClick }: BudgetCardProps) {
   const styles = categoryStyles[category.type];
   const label = categoryLabels[category.type];
   const percentage = totalBudget > 0 ? (category.amount / totalBudget) * 100 : 0;
@@ -52,13 +53,13 @@ export function BudgetCard({ category, totalBudget, onClick }: BudgetCardProps) 
           {category.percentage}%
         </span>
       </div>
-      
+
       <div className="mb-3">
         <span className={cn('text-2xl font-semibold tracking-tight', styles.text)}>
           {formatCurrency(category.amount)}
         </span>
       </div>
-      
+
       {/* Progress bar */}
       <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
         <div
@@ -66,10 +67,15 @@ export function BudgetCard({ category, totalBudget, onClick }: BudgetCardProps) 
           style={{ width: `${Math.min(percentage, 100)}%` }}
         />
       </div>
-      
-      <p className="mt-2 text-caption">
-        {label}
-      </p>
+
+      <div className="mt-2 flex items-center justify-between text-caption">
+        <span>{label}</span>
+        {availableAmount !== undefined && (
+          <span className="font-medium opacity-80">
+            {formatCurrency(availableAmount)}
+          </span>
+        )}
+      </div>
     </button>
   );
 }

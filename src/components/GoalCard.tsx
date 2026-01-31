@@ -12,21 +12,21 @@ interface GoalCardProps {
 }
 
 export function GoalCard({ item, type, onClick }: GoalCardProps) {
-  const progress = item.targetAmount > 0 
-    ? (item.currentAmount / item.targetAmount) * 100 
+  const progress = item.targetAmount > 0
+    ? (item.currentAmount / item.targetAmount) * 100
     : 0;
-  
+
   const remaining = item.targetAmount - item.currentAmount;
   const isComplete = progress >= 100;
-  
+
   // Calculate time remaining for periodic expenses
   let timeRemaining = '';
   let isUrgent = false;
-  
+
   if (type === 'periodic' && 'dueDate' in item) {
     const daysLeft = differenceInDays(item.dueDate, new Date());
     const weeksLeft = differenceInWeeks(item.dueDate, new Date());
-    
+
     if (daysLeft < 0) {
       timeRemaining = 'Vencido';
       isUrgent = true;
@@ -42,23 +42,23 @@ export function GoalCard({ item, type, onClick }: GoalCardProps) {
     }
   }
 
-  const colorClass = type === 'goal' 
-    ? 'stroke-savings' 
-    : isUrgent 
-      ? 'stroke-destructive' 
+  const colorClass = type === 'goal'
+    ? 'stroke-savings'
+    : isUrgent
+      ? 'stroke-destructive'
       : 'stroke-fixed';
 
   return (
-    <button
+    <div
       onClick={onClick}
       className={cn(
-        'w-full p-4 bg-card border border-border rounded-2xl flex items-center gap-4 text-left',
+        'w-full p-4 bg-card border border-border rounded-2xl flex items-center gap-4 text-left relative cursor-pointer',
         'transition-all duration-200 hover:shadow-soft hover:border-transparent active:scale-[0.99]'
       )}
     >
-      <ProgressRing 
-        progress={progress} 
-        size={56} 
+      <ProgressRing
+        progress={progress}
+        size={56}
         strokeWidth={4}
         colorClass={colorClass}
       >
@@ -66,7 +66,7 @@ export function GoalCard({ item, type, onClick }: GoalCardProps) {
           {Math.round(progress)}%
         </span>
       </ProgressRing>
-      
+
       <div className="flex-1 min-w-0">
         <h3 className="font-medium truncate">{item.name}</h3>
         <p className="text-caption">
@@ -85,8 +85,8 @@ export function GoalCard({ item, type, onClick }: GoalCardProps) {
           </p>
         )}
       </div>
-      
+
       <ChevronRight className="w-5 h-5 text-muted-foreground" />
-    </button>
+    </div>
   );
 }

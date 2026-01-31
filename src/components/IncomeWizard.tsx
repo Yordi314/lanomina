@@ -27,7 +27,7 @@ export function IncomeWizard({ onClose, onSubmit }: IncomeWizardProps) {
   const [customFixed, setCustomFixed] = useState('');
 
   const numericAmount = parseFloat(amount) || 0;
-  
+
   const calculateDistribution = (fixedPercent: number) => {
     const remaining = 100 - fixedPercent;
     // Maintain 30/20 ratio for savings/variable from the remaining
@@ -78,7 +78,7 @@ export function IncomeWizard({ onClose, onSubmit }: IncomeWizardProps) {
         {step === 1 && (
           <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
             <h1 className="text-headline mb-8">¿Cuánto ingresó hoy?</h1>
-            
+
             <div className="relative w-full max-w-sm mb-8">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-3xl font-light text-muted-foreground">
                 RD$
@@ -113,7 +113,7 @@ export function IncomeWizard({ onClose, onSubmit }: IncomeWizardProps) {
 
             <div className="space-y-4 max-w-sm mx-auto">
               {/* Fixed */}
-              <div 
+              <div
                 className="p-5 bg-fixed-light rounded-3xl cursor-pointer transition-all hover:shadow-soft"
                 onClick={() => setEditingFixed(!editingFixed)}
               >
@@ -174,11 +174,22 @@ export function IncomeWizard({ onClose, onSubmit }: IncomeWizardProps) {
         <div className="p-6 border-t border-border">
           {step === 1 ? (
             <Button
-              onClick={() => setStep(2)}
+              onClick={() => {
+                if (includesGas) {
+                  // If gas mode, skip distribution and submit directly
+                  onSubmit({
+                    amount: numericAmount,
+                    includesGas: true,
+                    distribution: { fixed: 100, savings: 0, variable: 0 } // Dummy distribution
+                  });
+                } else {
+                  setStep(2);
+                }
+              }}
               disabled={numericAmount <= 0}
               className="w-full h-14 text-lg rounded-2xl"
             >
-              Siguiente
+              {includesGas ? 'Registrar Gasolina' : 'Siguiente'}
             </Button>
           ) : (
             <Button

@@ -9,25 +9,33 @@ import { EmptyState } from './EmptyState';
 import { GoalFormModal } from './GoalFormModal';
 import { PeriodicExpenseFormModal } from './PeriodicExpenseFormModal';
 import { ExpenseFormModal } from './ExpenseFormModal';
+import { LoanFormModal } from './LoanFormModal';
 import { SurplusCard } from './SurplusCard';
+import { ExternalIncomeModal } from './ExternalIncomeModal';
 import { FixedBillsSection } from './FixedBillsSection';
+import { LoansSection } from './LoansSection';
 import { TransactionHistory } from './TransactionHistory';
-import { useBudget, Goal, PeriodicExpense } from '@/hooks/useBudget';
-import { 
-  User, Target, CalendarClock, ChevronRight, Plus, 
+import { SettingsSheet } from './SettingsSheet';
+import { useBudget, Goal, PeriodicExpense, Loan } from '@/hooks/useBudget';
+import {
+  User, Target, CalendarClock, ChevronRight, Plus,
   LayoutDashboard, Wallet, ArrowRightLeft, History,
-  Settings, Receipt, Home
+  Settings, Receipt, Home, CreditCard, Menu
 } from 'lucide-react';
+import { MobileNavSheet } from './MobileNavSheet';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type SheetType = 'actions' | 'income' | 'transfer' | null;
-type ModalType = 'goal' | 'periodic' | 'expense' | null;
-type TabType = 'overview' | 'goals' | 'periodic' | 'fixed-bills' | 'history' | 'transactions';
+
+
+type SheetType = 'actions' | 'income' | 'transfer' | 'settings' | 'external-income' | null;
+type ModalType = 'goal' | 'periodic' | 'expense' | 'loan' | null;
+type TabType = 'overview' | 'goals' | 'periodic' | 'fixed-bills' | 'loans' | 'history' | 'transactions';
 
 const navItems = [
   { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
   { id: 'fixed-bills', label: 'Facturas Fijas', icon: Home },
+  { id: 'loans', label: 'Préstamos', icon: CreditCard },
   { id: 'goals', label: 'Metas', icon: Target },
   { id: 'periodic', label: 'Periódicos', icon: CalendarClock },
   { id: 'transactions', label: 'Movimientos', icon: Receipt },
@@ -42,11 +50,14 @@ export function Dashboard() {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<PeriodicExpense | null>(null);
 
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   const fixedCategory = budget.categories.find(c => c.id === 'fixed')!;
   const surplus = budget.getFixedSurplus();
 
-  const handleAction = (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense') => {
-    if (action === 'goal' || action === 'periodic' || action === 'expense') {
+  const handleAction = (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense' | 'loan' | 'external-income') => {
+    if (action === 'goal' || action === 'periodic' || action === 'expense' || action === 'loan') {
       setActiveSheet(null);
       setActiveModal(action);
     } else {
@@ -94,6 +105,11 @@ export function Dashboard() {
     setActiveModal(null);
     setSelectedExpense(null);
   };
+
+  const handleCloseLoanModal = () => {
+    setActiveModal(null);
+    setSelectedLoan(null);
+  }
 
   const handleMoveSurplus = (toCategory: 'savings' | 'variable') => {
     if (surplus > 0) {
@@ -144,7 +160,7 @@ export function Dashboard() {
 
         {/* Quick Actions */}
         <div className="p-4 border-t border-border space-y-2">
-          <Button 
+          <Button
             onClick={() => setActiveModal('expense')}
             className="w-full justify-start gap-3"
             variant="default"
@@ -152,7 +168,7 @@ export function Dashboard() {
             <Receipt className="w-4 h-4" />
             Registrar Gasto
           </Button>
-          <Button 
+          <Button
             onClick={() => setActiveSheet('income')}
             className="w-full justify-start gap-3"
             variant="outline"
@@ -160,7 +176,7 @@ export function Dashboard() {
             <Wallet className="w-4 h-4" />
             Registrar Quincena
           </Button>
-          <Button 
+          <Button
             onClick={() => setActiveSheet('transfer')}
             className="w-full justify-start gap-3"
             variant="ghost"
@@ -170,17 +186,19 @@ export function Dashboard() {
           </Button>
         </div>
 
-        {/* User */}
+        {/* User / Settings */}
         <div className="p-4 border-t border-border">
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors">
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-              <User className="w-4 h-4 text-muted-foreground" />
+          <button
+            onClick={() => setActiveSheet('settings')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors group"
+          >
+            <div className="w-9 h-9 rounded-full bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+              <Settings className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm font-medium">Usuario</p>
-              <p className="text-xs text-muted-foreground">Mi cuenta</p>
+              <p className="text-sm font-medium">Configuración</p>
+              <p className="text-xs text-muted-foreground">Gestionar datos</p>
             </div>
-            <Settings className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
       </aside>
@@ -190,38 +208,34 @@ export function Dashboard() {
         {/* Mobile Header */}
         <header className="lg:hidden px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold">
-              Mi<span className="text-savings">Nómina</span>
-            </h1>
-            <button className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-              <User className="w-5 h-5 text-muted-foreground" />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMobileNavOpen(true)}
+                className="p-2 -ml-2 rounded-full hover:bg-muted"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <h1 className="text-lg font-semibold">
+                Mi<span className="text-savings">Nómina</span>
+              </h1>
+            </div>
+            <button
+              onClick={() => setActiveSheet('settings')}
+              className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"
+            >
+              <Settings className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
         </header>
 
-        {/* Mobile Tab Navigation */}
-        <div className="lg:hidden px-6 py-4 border-b border-border overflow-x-auto">
-          <div className="flex gap-2">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as TabType)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all',
-                    activeTab === item.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <MobileNavSheet
+          open={mobileNavOpen}
+          onOpenChange={setMobileNavOpen}
+          items={navItems}
+          activeTab={activeTab}
+          onTabChange={(tab: string) => setActiveTab(tab as TabType)}
+        />
+
 
         {/* Page Content */}
         <div className="p-6 lg:p-10 max-w-6xl mx-auto">
@@ -236,7 +250,7 @@ export function Dashboard() {
                       {formatCurrency(budget.totalBalance)}
                     </h2>
                     <p className="text-caption mt-2">
-                      {budget.incomeHistory.length > 0 
+                      {budget.incomeHistory.length > 0
                         ? `Última actualización: ${budget.incomeHistory[0].date.toLocaleDateString('es-DO')}`
                         : 'Registra tu primera quincena para comenzar'
                       }
@@ -260,7 +274,7 @@ export function Dashboard() {
               </div>
 
               {/* Surplus Opportunity Card */}
-              {surplus > 0 && budget.fixedBills.length > 0 && (
+              {surplus > 0 && (budget.fixedBills.length > 0 || budget.loans.length > 0) && (
                 <SurplusCard
                   surplusAmount={surplus}
                   onMoveToSavings={() => handleMoveSurplus('savings')}
@@ -277,11 +291,30 @@ export function Dashboard() {
                       key={category.id}
                       category={category}
                       totalBudget={budget.totalBalance}
+                      availableAmount={category.id === 'fixed' ? budget.getFixedSurplus() : undefined}
                       onClick={() => setActiveSheet('transfer')}
                     />
                   ))}
                 </div>
               </section>
+
+              {/* Loans Summary Mini-Card (Optional or Integrated) */}
+              {budget.loans.length > 0 && (
+                <section className="card-soft p-6 bg-blue-50/20 border-blue-100/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-blue-900">Préstamos Activos</h3>
+                        <p className="text-xs text-blue-700/80">Compromiso total: {formatCurrency(budget.getTotalLoansPayment())} / quincena</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveTab('loans')}>Ver detalles</Button>
+                  </div>
+                </section>
+              )}
 
               {/* Two Column Layout for Goals and Periodic */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -289,7 +322,7 @@ export function Dashboard() {
                 <section className="card-soft p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-title">Metas de Ahorro</h2>
-                    <button 
+                    <button
                       onClick={() => setActiveTab('goals')}
                       className="text-sm font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
                     >
@@ -298,14 +331,21 @@ export function Dashboard() {
                   </div>
                   {budget.goals.length > 0 ? (
                     <div className="space-y-3">
-                      {budget.goals.slice(0, 2).map(goal => (
-                        <GoalCard 
-                          key={goal.id} 
-                          item={goal} 
-                          type="goal" 
-                          onClick={() => handleGoalClick(goal)}
-                        />
-                      ))}
+                      {budget.goals.slice(0, 2).map(goal => {
+                        // Dynamic Calculation: Goal Amount = Savings * Percentage
+                        const savingsCategory = budget.categories.find(c => c.id === 'savings');
+                        const totalSavings = savingsCategory ? savingsCategory.amount : 0;
+                        const dynamicAmount = (totalSavings * goal.allocationPercentage) / 100;
+
+                        return (
+                          <GoalCard
+                            key={goal.id}
+                            item={{ ...goal, currentAmount: dynamicAmount }}
+                            type="goal"
+                            onClick={() => handleGoalClick(goal)}
+                          />
+                        );
+                      })}
                     </div>
                   ) : (
                     <EmptyState
@@ -320,7 +360,7 @@ export function Dashboard() {
                 <section className="card-soft p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-title">Próximos Vencimientos</h2>
-                    <button 
+                    <button
                       onClick={() => setActiveTab('periodic')}
                       className="text-sm font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
                     >
@@ -330,10 +370,10 @@ export function Dashboard() {
                   {upcomingExpenses.length > 0 ? (
                     <div className="space-y-3">
                       {upcomingExpenses.map(expense => (
-                        <GoalCard 
-                          key={expense.id} 
-                          item={expense} 
-                          type="periodic" 
+                        <GoalCard
+                          key={expense.id}
+                          item={expense}
+                          type="periodic"
                           onClick={() => handleExpenseClick(expense)}
                         />
                       ))}
@@ -358,14 +398,37 @@ export function Dashboard() {
                   <p className="text-caption">Configura tus gastos recurrentes para calcular el excedente</p>
                 </div>
               </div>
-              
-              <div className="max-w-xl">
+
+
+              <div className="mx-auto w-full max-w-4xl">
                 <FixedBillsSection
                   bills={budget.fixedBills}
+                  loans={budget.loans}
                   fixedCategory={fixedCategory}
                   onAddBill={budget.addFixedBill}
                   onUpdateBill={budget.updateFixedBill}
                   onDeleteBill={budget.deleteFixedBill}
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'loans' && (
+            <div className="animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-headline">Mis Préstamos</h2>
+                  <p className="text-caption">Control de deudas y pagos quincenales</p>
+                </div>
+              </div>
+
+              <div className="mx-auto w-full max-w-4xl">
+                <LoansSection
+                  loans={budget.loans}
+                  fixedCategory={fixedCategory}
+                  onAddLoan={budget.addLoan}
+                  onUpdateLoan={budget.updateLoan}
+                  onDeleteLoan={budget.deleteLoan}
                 />
               </div>
             </div>
@@ -383,17 +446,24 @@ export function Dashboard() {
                   Nueva Meta
                 </Button>
               </div>
-              
+
               {budget.goals.length > 0 ? (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-                  {budget.goals.map(goal => (
-                    <GoalCard 
-                      key={goal.id} 
-                      item={goal} 
-                      type="goal" 
-                      onClick={() => handleGoalClick(goal)}
-                    />
-                  ))}
+                  {budget.goals.map(goal => {
+                    // Dynamic Calculation
+                    const savingsCategory = budget.categories.find(c => c.id === 'savings');
+                    const totalSavings = savingsCategory ? savingsCategory.amount : 0;
+                    const dynamicAmount = (totalSavings * goal.allocationPercentage) / 100;
+
+                    return (
+                      <GoalCard
+                        key={goal.id}
+                        item={{ ...goal, currentAmount: dynamicAmount }}
+                        type="goal"
+                        onClick={() => handleGoalClick(goal)}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="card-soft">
@@ -425,14 +495,14 @@ export function Dashboard() {
                   Nuevo Gasto
                 </Button>
               </div>
-              
+
               {budget.periodicExpenses.length > 0 ? (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                   {budget.periodicExpenses.map(expense => (
-                    <GoalCard 
-                      key={expense.id} 
-                      item={expense} 
-                      type="periodic" 
+                    <GoalCard
+                      key={expense.id}
+                      item={expense}
+                      type="periodic"
                       onClick={() => handleExpenseClick(expense)}
                     />
                   ))}
@@ -467,7 +537,7 @@ export function Dashboard() {
                   Nuevo Gasto
                 </Button>
               </div>
-              
+
               <TransactionHistory
                 expenses={budget.expenses}
                 categories={budget.categories}
@@ -486,7 +556,7 @@ export function Dashboard() {
                   <p className="text-caption">Registro de todas tus quincenas</p>
                 </div>
               </div>
-              
+
               {budget.incomeHistory.length > 0 ? (
                 <div className="card-soft divide-y divide-border">
                   {budget.incomeHistory.map(income => (
@@ -498,10 +568,10 @@ export function Dashboard() {
                         <div>
                           <p className="font-medium">{income.concept}</p>
                           <p className="text-caption">
-                            {income.date.toLocaleDateString('es-DO', { 
-                              day: 'numeric', 
-                              month: 'long', 
-                              year: 'numeric' 
+                            {income.date.toLocaleDateString('es-DO', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric'
                             })}
                           </p>
                         </div>
@@ -540,30 +610,56 @@ export function Dashboard() {
             <Plus className="w-6 h-6" strokeWidth={2.5} />
           </button>
         </div>
-      </main>
+      </main >
 
       {/* Sheets */}
-      {activeSheet === 'actions' && (
-        <ActionSheet
-          onClose={() => setActiveSheet(null)}
-          onAction={handleAction}
-        />
-      )}
+      {
+        activeSheet === 'actions' && (
+          <ActionSheet
+            onClose={() => setActiveSheet(null)}
+            onAction={handleAction}
+          />
+        )
+      }
 
-      {activeSheet === 'income' && (
-        <IncomeWizard
-          onClose={() => setActiveSheet(null)}
-          onSubmit={handleIncomeSubmit}
-        />
-      )}
+      {
+        activeSheet === 'income' && (
+          <IncomeWizard
+            onClose={() => setActiveSheet(null)}
+            onSubmit={handleIncomeSubmit}
+          />
+        )
+      }
 
-      {activeSheet === 'transfer' && (
-        <TransferSheet
-          categories={budget.categories}
-          onClose={() => setActiveSheet(null)}
-          onTransfer={handleTransfer}
-        />
-      )}
+      {
+        activeSheet === 'transfer' && (
+          <TransferSheet
+            categories={budget.categories}
+            onClose={() => setActiveSheet(null)}
+            onTransfer={handleTransfer}
+          />
+        )
+      }
+
+      {
+        activeSheet === 'settings' && (
+          <SettingsSheet
+            onClose={() => setActiveSheet(null)}
+            onResetData={budget.resetData}
+          />
+        )
+      }
+
+      {
+        activeSheet === 'external-income' && (
+          <ExternalIncomeModal
+            open={true}
+            onClose={() => setActiveSheet(null)}
+            onSave={budget.addExternalIncome}
+            categories={budget.categories}
+          />
+        )
+      }
 
       {/* Modals */}
       <GoalFormModal
@@ -584,6 +680,15 @@ export function Dashboard() {
         expense={selectedExpense}
       />
 
+      <LoanFormModal
+        open={activeModal === 'loan'}
+        onClose={handleCloseLoanModal}
+        onSave={budget.addLoan}
+        onUpdate={budget.updateLoan}
+        onDelete={budget.deleteLoan}
+        loan={selectedLoan}
+      />
+
       <ExpenseFormModal
         open={activeModal === 'expense'}
         onClose={() => setActiveModal(null)}
@@ -591,7 +696,8 @@ export function Dashboard() {
         categories={budget.categories}
         goals={budget.goals}
         periodicExpenses={budget.periodicExpenses}
+        gasAvailable={budget.gasAvailable}
       />
-    </div>
+    </div >
   );
 }

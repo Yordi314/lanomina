@@ -40,6 +40,7 @@ export interface FixedBill {
   name: string;
   amount: number;
   frequency: 'monthly' | 'biweekly';
+  fortnight?: 1 | 2 | null; // null means both/monthly
   icon?: string;
 }
 
@@ -50,15 +51,28 @@ export interface Expense {
   categoryId: string; // 'fixed', 'savings', 'variable', or goal/periodic ID
   categoryType: 'fixed' | 'savings' | 'variable' | 'goal' | 'periodic';
   description: string;
+  isGas?: boolean;
+}
+
+export interface Loan {
+  id: string;
+  name: string;
+  totalAmount: number;
+  durationValue: number;
+  durationType: 'fortnights' | 'months';
+  paymentPerFortnight: number;
+  startDate: Date;
 }
 
 export interface BudgetState {
   totalBalance: number;
+  gasAvailable: number;
   categories: BudgetCategory[];
   goals: Goal[];
   periodicExpenses: PeriodicExpense[];
   incomeHistory: Income[];
   fixedBills: FixedBill[];
+  loans: Loan[];
   expenses: Expense[];
 }
 
@@ -74,11 +88,13 @@ const getInitialState = (): BudgetState => {
   if (typeof window === 'undefined') {
     return {
       totalBalance: 0,
+      gasAvailable: 0,
       categories: initialCategories,
       goals: [],
       periodicExpenses: [],
       incomeHistory: [],
       fixedBills: [],
+      loans: [],
       expenses: [],
     };
   }
@@ -89,6 +105,7 @@ const getInitialState = (): BudgetState => {
       const parsed = JSON.parse(stored);
       return {
         ...parsed,
+        gasAvailable: parsed.gasAvailable || 0,
         goals: (parsed.goals || []).map((g: Goal) => ({
           ...g,
           dueDate: g.dueDate ? new Date(g.dueDate) : undefined,
@@ -102,6 +119,10 @@ const getInitialState = (): BudgetState => {
           date: new Date(i.date),
         })),
         fixedBills: parsed.fixedBills || [],
+        loans: (parsed.loans || []).map((l: Loan) => ({
+          ...l,
+          startDate: new Date(l.startDate),
+        })),
         expenses: (parsed.expenses || []).map((e: Expense) => ({
           ...e,
           date: new Date(e.date),
@@ -114,11 +135,13 @@ const getInitialState = (): BudgetState => {
 
   return {
     totalBalance: 0,
+    gasAvailable: 0,
     categories: initialCategories,
     goals: [],
     periodicExpenses: [],
     incomeHistory: [],
     fixedBills: [],
+    loans: [],
     expenses: [],
   };
 };
@@ -134,31 +157,79 @@ export function useBudget() {
     }
   }, [state]);
 
-  // Calculate total fixed bills per fortnight
+  // Calculate total fixed bills per fortnight based on current date
   const getTotalFixedBills = useCallback(() => {
+    const currentDay = new Date().getDate();
+    // Logic: 1-15 = 1st, 16+ = 2nd
+    const currentFortnight = currentDay <= 15 ? 1 : 2;
+
     return state.fixedBills.reduce((sum, bill) => {
-      // If monthly, divide by 2 to get per-fortnight amount
-      const perFortnight = bill.frequency === 'monthly' ? bill.amount / 2 : bill.amount;
-      return sum + perFortnight;
+      // Robust check for fortnight filtering
+      // Explicitly checking for 1 or 2, handling potential string/number mismatch from storage
+      const billFortnight = bill.fortnight;
+
+      // Check if bill logic is specific to a fortnight
+      // We check if it is explicitly 1 or 2 (or string "1", "2")
+      if (billFortnight === 1 || billFortnight === 2 || billFortnight === '1' as any || billFortnight === '2' as any) {
+        // Normalize comparison
+        // eslint-disable-next-line eqeqeq
+        if (billFortnight != currentFortnight) {
+          // Skip if it doesn't match
+          return sum;
+        }
+        // If it matches, pay FULL amount (Frequency is implicitly biweekly here)
+        return sum + bill.amount;
+      }
+
+      // If we are here, bill is monthly (null/undefined/both)
+      // Pay half
+      return sum + (bill.amount / 2);
     }, 0);
   }, [state.fixedBills]);
 
-  // Calculate surplus in the fixed category
-  const getFixedSurplus = useCallback(() => {
-    const fixedCategory = state.categories.find(c => c.id === 'fixed');
-    if (!fixedCategory) return 0;
-    
-    const totalBills = getTotalFixedBills();
-    return Math.max(0, fixedCategory.amount - totalBills);
-  }, [state.categories, getTotalFixedBills]);
+  const resetData = useCallback(() => {
+    setState({
+      totalBalance: 0,
+      gasAvailable: 0,
+      categories: initialCategories,
+      goals: [],
+      periodicExpenses: [],
+      incomeHistory: [],
+      fixedBills: [],
+      loans: [],
+      expenses: [],
+    });
+  }, []);
+
+
 
   const addIncome = useCallback((income: Omit<Income, 'id'>, distribution: { fixed: number; savings: number; variable: number }) => {
     setState(prev => {
       const newIncome: Income = {
         ...income,
+        // Override concept if it's a gas-only entry (logic handled in UI, but safe to force here if needed)
+        concept: income.includesGas ? 'Gasolina' : income.concept,
         id: Date.now().toString(),
       };
 
+      // If includesGas is true, this is a Gasoline Deposit ONLY
+      // It goes fully to Fixed Expenses and Gas Available
+      if (income.includesGas) {
+        const newCategories = prev.categories.map(cat => {
+          if (cat.id === 'fixed') return { ...cat, amount: cat.amount + income.amount };
+          return cat;
+        });
+
+        return {
+          ...prev,
+          totalBalance: prev.totalBalance + income.amount,
+          gasAvailable: prev.gasAvailable + income.amount,
+          categories: newCategories,
+          incomeHistory: [newIncome, ...prev.incomeHistory],
+        };
+      }
+
+      // Normal Income (Payroll) distribution
       const newCategories = prev.categories.map(cat => {
         if (cat.id === 'fixed') return { ...cat, amount: cat.amount + distribution.fixed };
         if (cat.id === 'savings') return { ...cat, amount: cat.amount + distribution.savings };
@@ -170,6 +241,33 @@ export function useBudget() {
         ...prev,
         totalBalance: prev.totalBalance + income.amount,
         categories: newCategories,
+        incomeHistory: [newIncome, ...prev.incomeHistory],
+      };
+    });
+  }, []);
+
+  const addExternalIncome = useCallback((amount: number, categoryId: string, concept: string) => {
+    setState(prev => {
+      const newIncome: Income = {
+        id: Date.now().toString(),
+        date: new Date(),
+        concept: concept || 'Ingreso Extra',
+        amount: amount,
+        includesGas: false, // External income is not gas by default logic usually
+      };
+
+      const newCategories = prev.categories.map(cat => {
+        if (cat.id === categoryId) {
+          return { ...cat, amount: cat.amount + amount };
+        }
+        return cat;
+      });
+
+      return {
+        ...prev,
+        totalBalance: prev.totalBalance + amount,
+        categories: newCategories,
+        // Optional: Do we want to record this in general history? User requested "ingresar esos montos", implies tracking.
         incomeHistory: [newIncome, ...prev.incomeHistory],
       };
     });
@@ -347,9 +445,15 @@ export function useBudget() {
       // Calculate new total balance
       const newTotalBalance = newCategories.reduce((sum, cat) => sum + cat.amount, 0);
 
+      // If it's a Gas Expense, deduct from Gas Available
+      const newGasAvailable = expense.isGas
+        ? Math.max(0, prev.gasAvailable - expense.amount)
+        : prev.gasAvailable;
+
       return {
         ...prev,
         totalBalance: newTotalBalance,
+        gasAvailable: newGasAvailable,
         categories: newCategories,
         goals: newGoals,
         periodicExpenses: newPeriodicExpenses,
@@ -393,9 +497,15 @@ export function useBudget() {
 
       const newTotalBalance = newCategories.reduce((sum, cat) => sum + cat.amount, 0);
 
+      // Refund Gas if applicable
+      const newGasAvailable = expense.isGas
+        ? prev.gasAvailable + expense.amount
+        : prev.gasAvailable;
+
       return {
         ...prev,
         totalBalance: newTotalBalance,
+        gasAvailable: newGasAvailable,
         categories: newCategories,
         goals: newGoals,
         periodicExpenses: newPeriodicExpenses,
@@ -404,11 +514,53 @@ export function useBudget() {
     });
   }, []);
 
+  // Loans CRUD
+  const addLoan = useCallback((loan: Omit<Loan, 'id'>) => {
+    setState(prev => ({
+      ...prev,
+      loans: [...(prev.loans || []), { ...loan, id: Date.now().toString() }],
+    }));
+  }, []);
+
+  const updateLoan = useCallback((loanId: string, updates: Partial<Omit<Loan, 'id'>>) => {
+    setState(prev => ({
+      ...prev,
+      loans: (prev.loans || []).map(loan =>
+        loan.id === loanId ? { ...loan, ...updates } : loan
+      ),
+    }));
+  }, []);
+
+  const deleteLoan = useCallback((loanId: string) => {
+    setState(prev => ({
+      ...prev,
+      loans: (prev.loans || []).filter(loan => loan.id !== loanId),
+    }));
+  }, []);
+
+  // Calculate total loan payments per fortnight
+  const getTotalLoansPayment = useCallback(() => {
+    return (state.loans || []).reduce((sum, loan) => sum + loan.paymentPerFortnight, 0);
+  }, [state.loans]);
+
+  // Updated Fixed Surplus Calculation to include Loans
+  const getFixedSurplus = useCallback(() => {
+    const fixedCategory = state.categories.find(c => c.id === 'fixed');
+    if (!fixedCategory) return 0;
+
+    const totalBills = getTotalFixedBills();
+    const totalLoans = getTotalLoansPayment();
+
+    return Math.max(0, fixedCategory.amount - totalBills - totalLoans);
+  }, [state.categories, getTotalFixedBills, getTotalLoansPayment]);
+
   return {
     ...state,
     getTotalFixedBills,
     getFixedSurplus,
+    getTotalLoansPayment,
     addIncome,
+    addExternalIncome,
     transferBetweenCategories,
     fundGoal,
     fundPeriodicExpense,
@@ -421,7 +573,11 @@ export function useBudget() {
     addFixedBill,
     updateFixedBill,
     deleteFixedBill,
+    addLoan,
+    updateLoan,
+    deleteLoan,
     addExpense,
     deleteExpense,
+    resetData,
   };
 }

@@ -51,12 +51,12 @@ const getCategoryColor = (categoryType: Expense['categoryType']) => {
   }
 };
 
-export function TransactionHistory({ 
-  expenses, 
-  categories, 
-  goals, 
+export function TransactionHistory({
+  expenses,
+  categories,
+  goals,
   periodicExpenses,
-  onDeleteExpense 
+  onDeleteExpense
 }: TransactionHistoryProps) {
   const [filter, setFilter] = useState<FilterType>('all');
 
@@ -85,7 +85,7 @@ export function TransactionHistory({
 
     return expenses.filter(expense => {
       const expenseDate = new Date(expense.date);
-      
+
       switch (filter) {
         case 'current-month':
           return isWithinInterval(expenseDate, { start: monthStart, end: monthEnd });
@@ -115,7 +115,7 @@ export function TransactionHistory({
             -{formatCurrency(totalFiltered)}
           </p>
         </div>
-        
+
         <Select value={filter} onValueChange={(v) => setFilter(v as FilterType)}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filtrar por..." />
@@ -137,13 +137,13 @@ export function TransactionHistory({
           {filteredExpenses.map(expense => {
             const Icon = getCategoryIcon(expense.categoryType, expense.categoryId);
             const colorClass = getCategoryColor(expense.categoryType);
-            
+
             return (
               <div key={expense.id} className="p-4 flex items-center gap-4 group">
                 <div className={cn('w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', colorClass)}>
                   <Icon className="w-5 h-5" />
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">
                     {expense.description || getCategoryName(expense)}
@@ -152,15 +152,15 @@ export function TransactionHistory({
                     {getCategoryName(expense)} • {format(expense.date, "d 'de' MMMM", { locale: es })}
                   </p>
                 </div>
-                
+
                 <span className="text-base font-semibold text-foreground">
                   -{formatCurrency(expense.amount)}
                 </span>
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="icon"
                       className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
                     >

@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 interface ActionSheetProps {
   onClose: () => void;
-  onAction: (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense') => void;
+  onAction: (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense' | 'external-income') => void;
 }
 
 const actions = [
@@ -20,6 +20,13 @@ const actions = [
     title: 'Registrar Quincena',
     description: 'Ingreso de nómina o gasolina',
     color: 'bg-savings text-white',
+  },
+  {
+    id: 'external-income' as const,
+    icon: Wallet,
+    title: 'Ingreso Extra',
+    description: 'Ahorros externos, regalos...',
+    color: 'bg-emerald-600 text-white',
   },
   {
     id: 'transfer' as const,
@@ -46,11 +53,11 @@ const actions = [
 
 export function ActionSheet({ onClose, onAction }: ActionSheetProps) {
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
-      <div 
+      <div
         className="absolute inset-x-0 bottom-0 bg-background rounded-t-3xl shadow-soft-lg animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
