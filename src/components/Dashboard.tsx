@@ -8,24 +8,30 @@ import { TransferSheet } from './TransferSheet';
 import { EmptyState } from './EmptyState';
 import { GoalFormModal } from './GoalFormModal';
 import { PeriodicExpenseFormModal } from './PeriodicExpenseFormModal';
+import { ExpenseFormModal } from './ExpenseFormModal';
+import { SurplusCard } from './SurplusCard';
+import { FixedBillsSection } from './FixedBillsSection';
+import { TransactionHistory } from './TransactionHistory';
 import { useBudget, Goal, PeriodicExpense } from '@/hooks/useBudget';
 import { 
   User, Target, CalendarClock, ChevronRight, Plus, 
   LayoutDashboard, Wallet, ArrowRightLeft, History,
-  Settings
+  Settings, Receipt, Home
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 type SheetType = 'actions' | 'income' | 'transfer' | null;
-type ModalType = 'goal' | 'periodic' | null;
-type TabType = 'overview' | 'goals' | 'periodic' | 'history';
+type ModalType = 'goal' | 'periodic' | 'expense' | null;
+type TabType = 'overview' | 'goals' | 'periodic' | 'fixed-bills' | 'history' | 'transactions';
 
 const navItems = [
   { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
+  { id: 'fixed-bills', label: 'Facturas Fijas', icon: Home },
   { id: 'goals', label: 'Metas', icon: Target },
   { id: 'periodic', label: 'Periódicos', icon: CalendarClock },
-  { id: 'history', label: 'Historial', icon: History },
+  { id: 'transactions', label: 'Movimientos', icon: Receipt },
+  { id: 'history', label: 'Ingresos', icon: History },
 ];
 
 export function Dashboard() {
@@ -36,8 +42,11 @@ export function Dashboard() {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<PeriodicExpense | null>(null);
 
-  const handleAction = (action: 'income' | 'transfer' | 'goal' | 'periodic') => {
-    if (action === 'goal' || action === 'periodic') {
+  const fixedCategory = budget.categories.find(c => c.id === 'fixed')!;
+  const surplus = budget.getFixedSurplus();
+
+  const handleAction = (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense') => {
+    if (action === 'goal' || action === 'periodic' || action === 'expense') {
       setActiveSheet(null);
       setActiveModal(action);
     } else {
@@ -86,6 +95,12 @@ export function Dashboard() {
     setSelectedExpense(null);
   };
 
+  const handleMoveSurplus = (toCategory: 'savings' | 'variable') => {
+    if (surplus > 0) {
+      budget.transferBetweenCategories('fixed', toCategory, surplus);
+    }
+  };
+
   const upcomingExpenses = budget.periodicExpenses
     .filter(e => e.currentAmount < e.targetAmount)
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
@@ -103,7 +118,7 @@ export function Dashboard() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4">
+        <nav className="flex-1 p-4 overflow-y-auto">
           <ul className="space-y-1">
             {navItems.map(item => {
               const Icon = item.icon;
@@ -129,6 +144,14 @@ export function Dashboard() {
 
         {/* Quick Actions */}
         <div className="p-4 border-t border-border space-y-2">
+          <Button 
+            onClick={() => setActiveModal('expense')}
+            className="w-full justify-start gap-3"
+            variant="default"
+          >
+            <Receipt className="w-4 h-4" />
+            Registrar Gasto
+          </Button>
           <Button 
             onClick={() => setActiveSheet('income')}
             className="w-full justify-start gap-3"
@@ -219,18 +242,31 @@ export function Dashboard() {
                       }
                     </p>
                   </div>
-                  <div className="flex gap-3">
-                    <Button onClick={() => setActiveSheet('income')} size="lg" className="gap-2">
-                      <Plus className="w-4 h-4" />
-                      Registrar Quincena
+                  <div className="flex flex-wrap gap-3">
+                    <Button onClick={() => setActiveModal('expense')} size="lg" className="gap-2">
+                      <Receipt className="w-4 h-4" />
+                      Registrar Gasto
                     </Button>
-                    <Button onClick={() => setActiveSheet('transfer')} variant="outline" size="lg" className="gap-2">
+                    <Button onClick={() => setActiveSheet('income')} variant="outline" size="lg" className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Quincena
+                    </Button>
+                    <Button onClick={() => setActiveSheet('transfer')} variant="ghost" size="lg" className="gap-2">
                       <ArrowRightLeft className="w-4 h-4" />
                       Transferir
                     </Button>
                   </div>
                 </div>
               </div>
+
+              {/* Surplus Opportunity Card */}
+              {surplus > 0 && budget.fixedBills.length > 0 && (
+                <SurplusCard
+                  surplusAmount={surplus}
+                  onMoveToSavings={() => handleMoveSurplus('savings')}
+                  onMoveToVariable={() => handleMoveSurplus('variable')}
+                />
+              )}
 
               {/* Budget Pillars - Grid for desktop */}
               <section>
@@ -314,6 +350,27 @@ export function Dashboard() {
             </div>
           )}
 
+          {activeTab === 'fixed-bills' && (
+            <div className="animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-headline">Mis Facturas Fijas</h2>
+                  <p className="text-caption">Configura tus gastos recurrentes para calcular el excedente</p>
+                </div>
+              </div>
+              
+              <div className="max-w-xl">
+                <FixedBillsSection
+                  bills={budget.fixedBills}
+                  fixedCategory={fixedCategory}
+                  onAddBill={budget.addFixedBill}
+                  onUpdateBill={budget.updateFixedBill}
+                  onDeleteBill={budget.deleteFixedBill}
+                />
+              </div>
+            </div>
+          )}
+
           {activeTab === 'goals' && (
             <div className="animate-fade-in">
               <div className="flex items-center justify-between mb-6">
@@ -328,7 +385,7 @@ export function Dashboard() {
               </div>
               
               {budget.goals.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                   {budget.goals.map(goal => (
                     <GoalCard 
                       key={goal.id} 
@@ -395,6 +452,29 @@ export function Dashboard() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'transactions' && (
+            <div className="animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-headline">Movimientos</h2>
+                  <p className="text-caption">Historial de todos tus gastos</p>
+                </div>
+                <Button onClick={() => setActiveModal('expense')} className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Nuevo Gasto
+                </Button>
+              </div>
+              
+              <TransactionHistory
+                expenses={budget.expenses}
+                categories={budget.categories}
+                goals={budget.goals}
+                periodicExpenses={budget.periodicExpenses}
+                onDeleteExpense={budget.deleteExpense}
+              />
             </div>
           )}
 
@@ -502,6 +582,15 @@ export function Dashboard() {
         onUpdate={budget.updatePeriodicExpense}
         onDelete={budget.deletePeriodicExpense}
         expense={selectedExpense}
+      />
+
+      <ExpenseFormModal
+        open={activeModal === 'expense'}
+        onClose={() => setActiveModal(null)}
+        onSave={budget.addExpense}
+        categories={budget.categories}
+        goals={budget.goals}
+        periodicExpenses={budget.periodicExpenses}
       />
     </div>
   );

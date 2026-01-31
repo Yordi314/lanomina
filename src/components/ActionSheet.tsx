@@ -1,12 +1,19 @@
-import { X, Wallet, ArrowRightLeft, Target, CalendarClock } from 'lucide-react';
+import { X, Wallet, ArrowRightLeft, Target, CalendarClock, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ActionSheetProps {
   onClose: () => void;
-  onAction: (action: 'income' | 'transfer' | 'goal' | 'periodic') => void;
+  onAction: (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense') => void;
 }
 
 const actions = [
+  {
+    id: 'expense' as const,
+    icon: Receipt,
+    title: 'Registrar Gasto',
+    description: 'Descontar de una categoría',
+    color: 'bg-destructive text-destructive-foreground',
+  },
   {
     id: 'income' as const,
     icon: Wallet,
