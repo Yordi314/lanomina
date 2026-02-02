@@ -20,11 +20,12 @@ import { useBudget, Goal, PeriodicExpense, Loan } from '@/hooks/useBudget';
 import {
   User, Target, CalendarClock, ChevronRight, Plus,
   LayoutDashboard, Wallet, ArrowRightLeft, History,
-  Settings, Receipt, Home, CreditCard, Menu, Loader2
+  Settings, Receipt, Home, CreditCard, Menu, Loader2, LogOut
 } from 'lucide-react';
 import { MobileNavSheet } from './MobileNavSheet';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 
 
 
@@ -43,6 +44,7 @@ const navItems = [
 ];
 
 export function Dashboard() {
+  const { signOut } = useAuth();
   const budget = useBudget();
   const [activeSheet, setActiveSheet] = useState<SheetType>(null);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -224,6 +226,19 @@ export function Dashboard() {
               <p className="text-xs text-muted-foreground">Gestionar datos</p>
             </div>
           </button>
+
+          <button
+            onClick={() => signOut()}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors group text-destructive hover:text-destructive"
+          >
+            <div className="w-9 h-9 rounded-full bg-destructive/10 group-hover:bg-destructive/20 flex items-center justify-center transition-colors">
+              <LogOut className="w-5 h-5 text-destructive" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium">Cerrar Sesión</p>
+              <p className="text-xs text-muted-foreground/80">Salir de la cuenta</p>
+            </div>
+          </button>
         </div>
       </aside>
 
@@ -243,12 +258,20 @@ export function Dashboard() {
                 Mi<span className="text-savings">Nómina</span>
               </h1>
             </div>
-            <button
-              onClick={() => setActiveSheet('settings')}
-              className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"
-            >
-              <Settings className="w-5 h-5 text-muted-foreground" />
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveSheet('settings')}
+                className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"
+              >
+                <Settings className="w-5 h-5 text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => signOut()}
+                className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center"
+              >
+                <LogOut className="w-5 h-5 text-destructive" />
+              </button>
+            </div>
           </div>
         </header>
 
