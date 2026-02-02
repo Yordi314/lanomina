@@ -20,7 +20,7 @@ import { useBudget, Goal, PeriodicExpense, Loan } from '@/hooks/useBudget';
 import {
   User, Target, CalendarClock, ChevronRight, Plus,
   LayoutDashboard, Wallet, ArrowRightLeft, History,
-  Settings, Receipt, Home, CreditCard, Menu
+  Settings, Receipt, Home, CreditCard, Menu, Loader2
 } from 'lucide-react';
 import { MobileNavSheet } from './MobileNavSheet';
 import { cn } from '@/lib/utils';
@@ -55,8 +55,25 @@ export function Dashboard() {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const fixedCategory = budget.categories.find(c => c.id === 'fixed')!;
+  const fixedCategory = budget.categories.find(c => c.slug === 'fixed');
   const surplus = budget.getFixedSurplus();
+
+  if (budget.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!fixedCategory) {
+    return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Configurando tu cuenta...</p>
+      </div>
+    );
+  }
 
   const handleAction = (action: 'income' | 'transfer' | 'goal' | 'periodic' | 'expense' | 'loan' | 'external-income') => {
     if (action === 'goal' || action === 'periodic' || action === 'expense' || action === 'loan') {
@@ -120,7 +137,7 @@ export function Dashboard() {
 
   const handleMoveSurplus = (toCategory: 'savings' | 'variable') => {
     if (surplus > 0) {
-      budget.transferBetweenCategories('fixed', toCategory, surplus);
+      budget.transferBetweenCategories(fixedCategory.id, toCategory === 'savings' ? budget.categories.find(c => c.slug === 'savings')!.id : budget.categories.find(c => c.slug === 'variable')!.id, surplus);
     }
   };
 
@@ -298,9 +315,9 @@ export function Dashboard() {
                       key={category.id}
                       category={category}
                       totalBudget={budget.totalBalance}
-                      availableAmount={category.id === 'fixed' ? budget.getFixedSurplus() : undefined}
+                      availableAmount={category.slug === 'fixed' ? budget.getFixedSurplus() : undefined}
                       onClick={() => setActiveSheet('transfer')}
-                      onAddFunds={category.id === 'savings' ? () => handleAddFunds('savings') : undefined}
+                      onAddFunds={category.slug === 'savings' ? () => handleAddFunds(category.id) : undefined}
                     />
                   ))}
                 </div>
@@ -341,7 +358,7 @@ export function Dashboard() {
                     <div className="space-y-3">
                       {budget.goals.slice(0, 2).map(goal => {
                         // Dynamic Calculation: Goal Amount = Savings * Percentage
-                        const savingsCategory = budget.categories.find(c => c.id === 'savings');
+                        const savingsCategory = budget.categories.find(c => c.slug === 'savings');
                         const totalSavings = savingsCategory ? savingsCategory.amount : 0;
                         const dynamicAmount = (totalSavings * goal.allocationPercentage) / 100;
 
@@ -459,7 +476,7 @@ export function Dashboard() {
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                   {budget.goals.map(goal => {
                     // Dynamic Calculation
-                    const savingsCategory = budget.categories.find(c => c.id === 'savings');
+                    const savingsCategory = budget.categories.find(c => c.slug === 'savings');
                     const totalSavings = savingsCategory ? savingsCategory.amount : 0;
                     const dynamicAmount = (totalSavings * goal.allocationPercentage) / 100;
 

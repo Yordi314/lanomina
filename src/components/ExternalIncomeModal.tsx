@@ -15,7 +15,8 @@ interface ExternalIncomeModalProps {
 export function ExternalIncomeModal({ open, onClose, onSave, categories, initialCategory }: ExternalIncomeModalProps) {
     const [amount, setAmount] = useState('');
     const [concept, setConcept] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'savings');
+    const defaultCategory = categories.find(c => c.slug === 'savings')?.id || '';
+    const [selectedCategory, setSelectedCategory] = useState(initialCategory || defaultCategory);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,7 +30,9 @@ export function ExternalIncomeModal({ open, onClose, onSave, categories, initial
     const handleClose = () => {
         setAmount('');
         setConcept('');
-        setSelectedCategory(initialCategory || 'savings');
+        setConcept('');
+        const defaultCat = categories.find(c => c.slug === 'savings')?.id || '';
+        setSelectedCategory(initialCategory || defaultCat);
         onClose();
     };
 

@@ -18,17 +18,17 @@ const categoryColors = {
 };
 
 export function TransferSheet({ categories, onClose, onTransfer }: TransferSheetProps) {
-  const [fromId, setFromId] = useState(categories[2]?.id || ''); // Default: Variable
-  const [toId, setToId] = useState(categories[1]?.id || ''); // Default: Savings
+  const [fromId, setFromId] = useState(categories.find(c => c.slug === 'variable')?.id || ''); // Default: Variable
+  const [toId, setToId] = useState(categories.find(c => c.slug === 'savings')?.id || ''); // Default: Savings
   const [amount, setAmount] = useState('');
 
   const fromCategory = categories.find(c => c.id === fromId);
   const toCategory = categories.find(c => c.id === toId);
   const numericAmount = parseFloat(amount) || 0;
 
-  const canTransfer = numericAmount > 0 && 
-    fromId !== toId && 
-    fromCategory && 
+  const canTransfer = numericAmount > 0 &&
+    fromId !== toId &&
+    fromCategory &&
     numericAmount <= fromCategory.amount;
 
   const handleTransfer = () => {
@@ -68,8 +68,8 @@ export function TransferSheet({ categories, onClose, onTransfer }: TransferSheet
                     onClick={() => setFromId(cat.id)}
                     className={cn(
                       'px-4 py-3 rounded-2xl transition-all',
-                      fromId === cat.id 
-                        ? cn(colors.bg, 'text-white scale-105 shadow-lg') 
+                      fromId === cat.id
+                        ? cn(colors.bg, 'text-white scale-105 shadow-lg')
                         : cn(colors.light, colors.text)
                     )}
                   >
@@ -85,13 +85,13 @@ export function TransferSheet({ categories, onClose, onTransfer }: TransferSheet
 
           {/* Amount Input */}
           <div className="relative">
-            <button 
+            <button
               onClick={handleSwap}
               className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
             >
               <ArrowDown className="w-4 h-4" />
             </button>
-            
+
             <div className="pt-6 pb-4 border-t border-b border-border">
               <div className="flex items-center justify-center gap-2">
                 <span className="text-2xl font-light text-muted-foreground">RD$</span>
@@ -123,8 +123,8 @@ export function TransferSheet({ categories, onClose, onTransfer }: TransferSheet
                     onClick={() => setToId(cat.id)}
                     className={cn(
                       'px-4 py-3 rounded-2xl transition-all',
-                      toId === cat.id 
-                        ? cn(colors.bg, 'text-white scale-105 shadow-lg') 
+                      toId === cat.id
+                        ? cn(colors.bg, 'text-white scale-105 shadow-lg')
                         : cn(colors.light, colors.text)
                     )}
                   >

@@ -36,7 +36,7 @@ export function ExpenseFormModal({
     if (open) {
       setDescription('');
       setAmount('');
-      const defaultCat = categories.find(c => c.id === 'variable')?.id || '';
+      const defaultCat = categories.find(c => c.slug === 'variable')?.id || '';
       setCategoryId(defaultCat);
       setCategoryType('variable');
       setIsGas(false);
@@ -75,10 +75,11 @@ export function ExpenseFormModal({
   const handleCategoryChange = (value: string) => {
     setCategoryId(value);
 
-    if (categories.some(c => c.id === value)) setCategoryType('variable');
-    else if (goals.some(g => g.id === value)) setCategoryType('goal');
+    const cat = categories.find(c => c.id === value);
+    if (cat) {
+      setCategoryType(cat.type as any);
+    } else if (goals.some(g => g.id === value)) setCategoryType('goal');
     else if (periodicExpenses.some(p => p.id === value)) setCategoryType('periodic');
-    else if (value === 'fixed' || value === 'savings') setCategoryType(value as any);
   };
 
   if (!open) return null;

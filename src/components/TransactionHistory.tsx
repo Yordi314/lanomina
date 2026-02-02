@@ -69,12 +69,9 @@ export function TransactionHistory({
       const pe = periodicExpenses.find(p => p.id === expense.categoryId);
       return pe?.name || 'Gasto Periódico';
     }
-    switch (expense.categoryId) {
-      case 'fixed': return 'Gastos Fijos';
-      case 'savings': return 'Ahorros';
-      case 'variable': return 'Gastos Personales';
-      default: return 'Otro';
-    }
+    const category = categories.find(c => c.id === expense.categoryId);
+    if (category) return category.nameEs;
+    return 'Otro';
   };
 
   const filteredExpenses = useMemo(() => {
