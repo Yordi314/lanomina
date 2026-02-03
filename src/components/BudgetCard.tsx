@@ -86,21 +86,6 @@ export function BudgetCard({ category, totalBudget, availableAmount, onClick, on
           <Icon className="w-6 h-6" />
         </div>
         <div className="flex items-center gap-2">
-          {onAddFunds && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddFunds();
-              }}
-              className={cn(
-                "p-1.5 rounded-full bg-white/50 hover:bg-white/80 transition-colors shadow-sm",
-                styles.iconColor
-              )}
-              title="Ingresar fondos"
-            >
-              <Plus className="w-4 h-4" strokeWidth={3} />
-            </button>
-          )}
           {onClick && (
             <div className="w-8 h-8 rounded-full bg-white/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <ChevronRight className={cn("w-4 h-4", styles.iconColor)} />
@@ -117,9 +102,28 @@ export function BudgetCard({ category, totalBudget, availableAmount, onClick, on
           </span>
         </div>
 
-        <h3 className={cn("text-2xl font-bold tracking-tight", styles.text)}>
-          {formatCurrency(category.amount)}
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className={cn("text-2xl font-bold tracking-tight", styles.text)}>
+            {formatCurrency(category.amount)}
+          </h3>
+
+          {onAddFunds && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddFunds();
+              }}
+              className={cn(
+                "p-2 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95",
+                "bg-white/60 hover:bg-white text-primary border border-border/50",
+                "backdrop-blur-sm"
+              )}
+              title="Ingresar fondos"
+            >
+              <Plus className="w-5 h-5" strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
 
         <div className={cn("mt-4 flex items-center justify-between text-xs font-medium opacity-60", styles.subtext)}>
           <span>{label}</span>

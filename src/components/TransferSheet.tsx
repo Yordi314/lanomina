@@ -9,6 +9,7 @@ interface TransferSheetProps {
   categories: BudgetCategory[];
   onClose: () => void;
   onTransfer: (fromId: string, toId: string, amount: number) => void;
+  initialFromId?: string;
 }
 
 const categoryColors = {
@@ -17,8 +18,8 @@ const categoryColors = {
   variable: { bg: 'bg-variable', light: 'bg-variable-light', text: 'text-variable' },
 };
 
-export function TransferSheet({ categories, onClose, onTransfer }: TransferSheetProps) {
-  const [fromId, setFromId] = useState(categories.find(c => c.slug === 'variable')?.id || ''); // Default: Variable
+export function TransferSheet({ categories, onClose, onTransfer, initialFromId }: TransferSheetProps) {
+  const [fromId, setFromId] = useState(initialFromId || categories.find(c => c.slug === 'variable')?.id || ''); // Default: Variable
   const [toId, setToId] = useState(categories.find(c => c.slug === 'savings')?.id || ''); // Default: Savings
   const [amount, setAmount] = useState('');
 
@@ -73,8 +74,8 @@ export function TransferSheet({ categories, onClose, onTransfer }: TransferSheet
                         : cn(colors.light, colors.text)
                     )}
                   >
-                    <div className="text-sm font-medium">{cat.nameEs}</div>
-                    <div className="text-xs opacity-80">
+                    <div className="text-sm font-bold tracking-wide">{(cat as any).name_es || cat.nameEs || cat.name}</div>
+                    <div className="text-xs opacity-90 font-mono mt-0.5">
                       {formatCurrency(cat.amount)}
                     </div>
                   </button>
@@ -128,8 +129,8 @@ export function TransferSheet({ categories, onClose, onTransfer }: TransferSheet
                         : cn(colors.light, colors.text)
                     )}
                   >
-                    <div className="text-sm font-medium">{cat.nameEs}</div>
-                    <div className="text-xs opacity-80">
+                    <div className="text-sm font-bold tracking-wide">{(cat as any).name_es || cat.nameEs || cat.name}</div>
+                    <div className="text-xs opacity-90 font-mono mt-0.5">
                       {formatCurrency(cat.amount)}
                     </div>
                   </button>

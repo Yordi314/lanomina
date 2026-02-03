@@ -55,7 +55,7 @@ export interface Expense {
   date: Date;
   amount: number;
   categoryId: string;
-  categoryType: 'fixed' | 'savings' | 'variable' | 'goal' | 'periodic';
+  categoryType: 'fixed' | 'savings' | 'variable' | 'goal' | 'periodic' | 'loan';
   description: string;
   isGas?: boolean;
 }
@@ -64,10 +64,12 @@ export interface Loan {
   id: string;
   name: string;
   totalAmount: number;
+  currentAmount: number;
   durationValue: number;
   durationType: 'fortnights' | 'months';
   paymentPerFortnight: number;
   startDate: Date;
+  status: 'active' | 'paid';
 }
 
 export function useBudget() {
@@ -163,10 +165,12 @@ export function useBudget() {
         id: l.id,
         name: l.name,
         totalAmount: Number(l.total_amount),
+        currentAmount: Number(l.current_amount || 0),
         durationValue: Number(l.duration_value),
         durationType: l.duration_type,
         paymentPerFortnight: Number(l.payment_per_fortnight),
         startDate: new Date(l.start_date),
+        status: l.status || 'active',
       })) as Loan[];
     },
     enabled: !!user,
@@ -191,16 +195,17 @@ export function useBudget() {
   });
 
   // Derived State
+  // Calculate loan progress from expenses history (Source of Truth)
+  const loansWithProgress = loans.map(loan => {
+    const paidAmount = expenses
+      .filter(e => e.categoryType === 'loan' && e.categoryId === loan.id)
+      .reduce((sum, e) => sum + e.amount, 0);
+    return { ...loan, currentAmount: paidAmount };
+  });
+
   const totalBalance = categories.reduce((sum, cat) => sum + cat.amount, 0);
 
-  // Helper for gas: manually summing fixed expenses marked as gas if needed, or tracking via logic?
-  // Old logic: gasAvailable was just part of Fixed category or tracked separately?
-  // Old logic: "if it's a Gasoline Deposit ONLY... It goes fully to Fixed Expenses and Gas Available"
-  // "gasAvailable" was a number in state.
-  // In pure DB, we don't have a "gasAvailable" field. We have to derive it.
-  // "Gas Available" = (Sum of Incomes where includesGas=true) - (Sum of Expenses where isGas=true) ??
-  // Or is it a subset of 'Fixed' category?
-  // Let's assume for now we calculate it on the fly:
+  // Helper for gas...
   const totalGasIncome = incomeHistory.filter(i => i.includesGas).reduce((sum, i) => sum + i.amount, 0);
   const totalGasExpenses = expenses.filter(e => e.isGas).reduce((sum, e) => sum + e.amount, 0);
   const gasAvailable = Math.max(0, totalGasIncome - totalGasExpenses);
@@ -222,8 +227,7 @@ export function useBudget() {
 
       // 2. Update Categories
       if (income.includesGas) {
-        // Gas income is ISOLATED. It stays in 'incomes' table to be summed for gasAvailable,
-        // but it is NOT added to any Category balance (Fixed, etc).
+        // Gas income is ISOLATED.
       } else {
         // Distribute
         const fixedCat = categories.find(c => c.slug === 'fixed');
@@ -417,6 +421,41 @@ export function useBudget() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['loans'] })
   });
 
+  const toggleLoanStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: 'active' | 'paid' }) => {
+      return await supabase.from('loans').update({ status }).eq('id', id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['loans'] })
+  });
+
+  const payLoanMutation = useMutation({
+    mutationFn: async ({ loanId, amount, sourceCategoryId, sourceCategorySlug }: { loanId: string, amount: number, sourceCategoryId: string, sourceCategorySlug: string }) => {
+      // 1. Deduct from Source
+      const category = categories.find(c => c.id === sourceCategoryId);
+      if (!category) throw new Error("Categoría de origen no encontrada");
+
+      await supabase.from('categories').update({ amount: Math.max(0, category.amount - amount) }).eq('id', sourceCategoryId);
+
+      // 2. Record Expense (Logic: We don't update Loan table, we iterate expenses)
+      await supabase.from('expenses').insert({
+        user_id: user?.id,
+        date: new Date().toISOString(),
+        amount: amount,
+        category_id: loanId, // Linked to LOAN
+        category_type: 'loan',
+        description: `Abono a Préstamo`,
+        is_gas: false
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      toast({ title: "Abono realizado exitosamente" });
+    },
+    onError: (error) => toast({ variant: "destructive", title: "Error", description: error.message })
+  });
+
 
 
   // Expenses
@@ -445,6 +484,7 @@ export function useBudget() {
           const p = periodicExpenses.find(pe => pe.id === expense.categoryId);
           if (p) await supabase.from('periodic_expenses').update({ current_amount: Math.max(0, p.currentAmount - expense.amount) }).eq('id', p.id);
         }
+        // Loans: No need to update 'current_amount' in DB as it is derived.
       }
     },
     onSuccess: () => {
@@ -452,6 +492,7 @@ export function useBudget() {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
       queryClient.invalidateQueries({ queryKey: ['periodicExpenses'] });
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
       toast({ title: "Gasto registrado" });
     }
   });
@@ -470,6 +511,7 @@ export function useBudget() {
           const p = periodicExpenses.find(pe => pe.id === oldExpense.categoryId);
           if (p) await supabase.from('periodic_expenses').update({ current_amount: p.currentAmount + oldExpense.amount }).eq('id', p.id);
         }
+        // Loans: Managed via derived state, no manual revert needed on Loan DB table
       }
 
       // 2. Calculate new values
@@ -489,28 +531,6 @@ export function useBudget() {
       await supabase.from('expenses').update(payload).eq('id', id);
 
       // 4. Apply New Expense impact
-      // We need to fetch the LATEST data to ensure we don't overwrite concurrent changes, 
-      // but for simplicity in this user-context, we'll re-fetch category/goal from current state 
-      // OR ideally we should refetch them. 
-      // BETTER: We just add the revert and the new deduct directly to the DB.
-      // However, since we did the revert above, we can now "Deduct" the new amount.
-
-      // Note: The "Revert" above might have updated the 'categories' state in DB. 
-      // The 'categories' variable here is stale compared to the DB state after step 1.
-      // BUT, supabase.from('categories').update... increments/decrements are best done with rpc or careful reads.
-      // Here we are doing read-modify-write. It risks race conditions but is consistent with the rest of this file.
-      // To be safer, we should re-find the category to get its conceptual "base", but really we need to trust the sequence.
-
-      // Limitation: We are using "categories" from render scope. If we just updated it in Step 1, "categories" variable is OLD.
-      // We must re-fetch or use a delta query. 
-      // Hack fix: We can assume we need to apply the NET difference if category is same, or full move if different.
-      // BUT complication: Category might change.
-
-      // Alternative: Do it in SQL or just endure the stale state for a split second (user won't notice unless rapid fire).
-      // Actually, the Revert Step 1 updates the DB.
-      // The Apply Step 4 needs to know the CURRENT balance in DB to subtract from.
-      // We can fetch it.
-
       let targetAmount = 0;
       let table = '';
 
@@ -523,16 +543,17 @@ export function useBudget() {
         const { data } = await supabase.from('goals').select('current_amount').eq('id', newCategoryId).single();
         if (data) targetAmount = data.current_amount;
       } else if (newCategoryType === 'periodic') {
-        table = 'periodic_expenses';
         const { data } = await supabase.from('periodic_expenses').select('current_amount').eq('id', newCategoryId).single();
         if (data) targetAmount = data.current_amount;
       }
+      // Loans: Derived.
 
       const newIsGas = updates.isGas !== undefined ? updates.isGas : oldExpense.isGas;
 
       if (!newIsGas && table) {
         const col = table === 'categories' ? 'amount' : 'current_amount';
-        await supabase.from(table).update({ [col]: Math.max(0, targetAmount - newAmount) }).eq('id', newCategoryId);
+        const newDbValue = Math.max(0, targetAmount - newAmount);
+        await supabase.from(table).update({ [col]: newDbValue }).eq('id', newCategoryId);
       }
 
     },
@@ -541,6 +562,7 @@ export function useBudget() {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
       queryClient.invalidateQueries({ queryKey: ['periodicExpenses'] });
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
       toast({ title: "Gasto actualizado" });
     }
   });
@@ -554,7 +576,6 @@ export function useBudget() {
       await supabase.from('expenses').delete().eq('id', expenseId);
 
       // 2. Refund Source
-      // 2. Refund Source (ONLY if not Gas)
       if (!expense.isGas) {
         if (['fixed', 'savings', 'variable'].includes(expense.categoryType)) {
           const cat = categories.find(c => c.id === expense.categoryId);
@@ -566,6 +587,7 @@ export function useBudget() {
           const p = periodicExpenses.find(pe => pe.id === expense.categoryId);
           if (p) await supabase.from('periodic_expenses').update({ current_amount: p.currentAmount + expense.amount }).eq('id', p.id);
         }
+        // Loans: Derived.
       }
     },
     onSuccess: () => {
@@ -573,6 +595,7 @@ export function useBudget() {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
       queryClient.invalidateQueries({ queryKey: ['periodicExpenses'] });
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
       toast({ title: "Gasto eliminado" });
     }
   });
@@ -610,22 +633,38 @@ export function useBudget() {
   // Calculations
   const getTotalFixedBills = useCallback(() => {
     const currentDay = new Date().getDate();
-    const currentFortnight = currentDay <= 15 ? 1 : 2;
+    // User Rules:
+    // Quincena 1: 15 al 29
+    // Quincena 2: 30 al 14 (Next month logic effectively handled by else)
+    const currentFortnight = (currentDay >= 15 && currentDay <= 29) ? 1 : 2;
 
     return fixedBills.reduce((sum, bill) => {
-      const billFortnight = bill.fortnight;
-      // Corregir lógica de chequeo de quincena, asumiendo numbers
+      // 1. Priority: Specific Fortnight Assignment
+      // IF a bill has a specific fortnight assigned (1 or 2), it overrides frequency rules.
+      const billFortnight = Number(bill.fortnight);
       if (billFortnight === 1 || billFortnight === 2) {
-        if (billFortnight !== currentFortnight) return sum;
+        if (billFortnight === currentFortnight) {
+          return sum + bill.amount;
+        }
+        return sum; // Skip if not matching fortnight
+      }
+
+      // 2. Frequency Fallback (No specific fortnight assigned)
+      if (bill.frequency === 'biweekly') {
+        // Paid every fortnight (Full amount)
         return sum + bill.amount;
       }
+
+      // Default: Monthly Split (Paid in both, split total)
       return sum + (bill.amount / 2);
     }, 0);
   }, [fixedBills]);
 
+  const activeLoans = loans.filter(l => l.status === 'active');
+
   const getTotalLoansPayment = useCallback(() => {
-    return loans.reduce((sum, loan) => sum + loan.paymentPerFortnight, 0);
-  }, [loans]);
+    return activeLoans.reduce((sum, loan) => sum + loan.paymentPerFortnight, 0);
+  }, [activeLoans]);
 
   const getFixedSurplus = useCallback(() => {
     // Find Fixed Category by Slug
@@ -680,7 +719,7 @@ export function useBudget() {
     periodicExpenses,
     incomeHistory,
     fixedBills,
-    loans,
+    loans: loansWithProgress,
     expenses,
 
     getTotalFixedBills,
@@ -709,6 +748,10 @@ export function useBudget() {
     addLoan: (loan: Omit<Loan, 'id'>) => addLoanMutation.mutate(loan),
     updateLoan: (id: string, updates: Partial<Omit<Loan, 'id'>>) => updateLoanMutation.mutate({ id, updates }),
     deleteLoan: (id: string) => deleteLoanMutation.mutate(id),
+    toggleLoanStatus: (id: string, status: 'active' | 'paid') => toggleLoanStatusMutation.mutate({ id, status }),
+    payLoan: (data: { loanId: string, amount: number, sourceCategoryId: string, sourceCategorySlug: string }) => payLoanMutation.mutate(data),
+
+    activeLoans,
 
     addExpense: (expense: Omit<Expense, 'id'>) => addExpenseMutation.mutate(expense),
     updateExpense: (id: string, updates: Partial<Omit<Expense, 'id'>>, oldExpense: Expense) => updateExpenseMutation.mutate({ id, updates, oldExpense }),

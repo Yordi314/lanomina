@@ -19,6 +19,7 @@ import { TransactionHistory } from './TransactionHistory';
 
 import { GasCard } from './GasCard';
 import { SettingsSheet } from './SettingsSheet';
+import { LoanPaymentModal } from './LoanPaymentModal';
 import { useBudget, Goal, PeriodicExpense, Loan, Expense, Income } from '@/hooks/useBudget';
 import {
   User, Target, CalendarClock, ChevronRight, Plus,
@@ -45,7 +46,7 @@ import { useAuth } from '@/context/AuthContext';
 
 
 type SheetType = 'actions' | 'income' | 'transfer' | 'settings' | 'external-income' | null;
-type ModalType = 'goal' | 'periodic' | 'expense' | 'loan' | 'income-edit' | null;
+type ModalType = 'goal' | 'periodic' | 'expense' | 'loan' | 'income-edit' | 'loanPayment' | null;
 type TabType = 'overview' | 'goals' | 'periodic' | 'fixed-bills' | 'loans' | 'history' | 'transactions';
 
 const navItems = [
@@ -72,9 +73,11 @@ export function Dashboard() {
   const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
 
   const [externalIncomeCategory, setExternalIncomeCategory] = useState<string | undefined>(undefined);
+  const [transferSourceId, setTransferSourceId] = useState<string | undefined>(undefined);
 
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [defaultCategoryId, setDefaultCategoryId] = useState<string | undefined>(undefined);
 
   const fixedCategory = budget.categories.find(c => c.slug === 'fixed');
   const surplus = budget.getFixedSurplus();
@@ -105,6 +108,11 @@ export function Dashboard() {
     }
   };
 
+  const handleOpenTransfer = (fromId?: string) => {
+    setTransferSourceId(fromId);
+    setActiveSheet('transfer');
+  };
+
   const handleAddFunds = (categoryId: string) => {
     setExternalIncomeCategory(categoryId);
     setActiveSheet('external-income');
@@ -112,6 +120,7 @@ export function Dashboard() {
 
   const handleGasCardClick = () => {
     setSelectedTransaction(null); // Clear edit state
+    setDefaultCategoryId(undefined);
     setActiveModal('expense');
   };
 
@@ -160,6 +169,18 @@ export function Dashboard() {
     setActiveModal(null);
     setSelectedLoan(null);
   }
+
+  const handleAddLoanPayment = (loanId: string) => {
+    setSelectedTransaction(null);
+    const loan = budget.loans.find(l => l.id === loanId);
+    if (loan) setSelectedLoan(loan);
+    setActiveModal('loanPayment');
+  };
+
+  const handleCloseLoanPaymentModal = () => {
+    setActiveModal(null);
+    setSelectedLoan(null);
+  };
 
   const handleMoveSurplus = (toCategory: 'savings' | 'variable') => {
     if (surplus > 0) {
@@ -233,7 +254,7 @@ export function Dashboard() {
         {/* Quick Actions */}
         <div className="p-4 border-t border-border space-y-2">
           <Button
-            onClick={() => { setSelectedTransaction(null); setActiveModal('expense'); }}
+            onClick={() => { setSelectedTransaction(null); setDefaultCategoryId(undefined); setActiveModal('expense'); }}
             className="w-full justify-start gap-3"
             variant="default"
           >
@@ -350,7 +371,7 @@ export function Dashboard() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <Button onClick={() => { setSelectedTransaction(null); setActiveModal('expense'); }} size="lg" className="gap-2">
+                    <Button onClick={() => { setSelectedTransaction(null); setDefaultCategoryId(undefined); setActiveModal('expense'); }} size="lg" className="gap-2">
                       <Receipt className="w-4 h-4" />
                       Registrar Gasto
                     </Button>
@@ -398,8 +419,8 @@ export function Dashboard() {
                       category={category}
                       totalBudget={budget.totalBalance}
                       availableAmount={category.slug === 'fixed' ? budget.getFixedSurplus() : undefined}
-                      onClick={() => setActiveSheet('transfer')}
-                      onAddFunds={category.slug === 'savings' ? () => handleAddFunds(category.id) : undefined}
+                      onClick={() => handleOpenTransfer(category.id)}
+                      onAddFunds={() => handleAddFunds(category.id)}
                     />
                   ))}
                 </div>
@@ -510,7 +531,7 @@ export function Dashboard() {
               <div className="mx-auto w-full max-w-4xl">
                 <FixedBillsSection
                   bills={budget.fixedBills}
-                  loans={budget.loans}
+                  loans={budget.activeLoans}
                   fixedCategory={fixedCategory}
                   onAddBill={budget.addFixedBill}
                   onUpdateBill={budget.updateFixedBill}
@@ -536,6 +557,8 @@ export function Dashboard() {
                   onAddLoan={budget.addLoan}
                   onUpdateLoan={budget.updateLoan}
                   onDeleteLoan={budget.deleteLoan}
+                  onToggleStatus={budget.toggleLoanStatus}
+                  onAddPayment={handleAddLoanPayment}
                 />
               </div>
             </div>
@@ -639,7 +662,7 @@ export function Dashboard() {
                   <h2 className="text-headline">Movimientos</h2>
                   <p className="text-caption">Historial de todos tus gastos</p>
                 </div>
-                <Button onClick={() => { setSelectedTransaction(null); setActiveModal('expense'); }} className="gap-2">
+                <Button onClick={() => { setSelectedTransaction(null); setDefaultCategoryId(undefined); setActiveModal('expense'); }} className="gap-2">
                   <Plus className="w-4 h-4" />
                   Nuevo Gasto
                 </Button>
@@ -783,8 +806,9 @@ export function Dashboard() {
         activeSheet === 'transfer' && (
           <TransferSheet
             categories={budget.categories}
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setTransferSourceId(undefined); }}
             onTransfer={handleTransfer}
+            initialFromId={transferSourceId}
           />
         )
       }
@@ -805,6 +829,7 @@ export function Dashboard() {
             onClose={() => setActiveSheet(null)}
             onSave={budget.addExternalIncome}
             categories={budget.categories}
+            initialCategory={externalIncomeCategory}
           />
         )
       }
@@ -835,6 +860,17 @@ export function Dashboard() {
         onUpdate={budget.updateLoan}
         onDelete={budget.deleteLoan}
         loan={selectedLoan}
+      />
+
+
+
+
+      <LoanPaymentModal
+        open={activeModal === 'loanPayment'}
+        onClose={handleCloseLoanPaymentModal}
+        onSave={budget.payLoan}
+        loan={selectedLoan}
+        categories={budget.categories}
       />
 
       <ExpenseFormModal

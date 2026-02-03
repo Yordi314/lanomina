@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Wallet, ArrowDownCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,13 @@ export function ExternalIncomeModal({ open, onClose, onSave, categories, initial
     const [concept, setConcept] = useState('');
     const defaultCategory = categories.find(c => c.slug === 'savings')?.id || '';
     const [selectedCategory, setSelectedCategory] = useState(initialCategory || defaultCategory);
+
+    // Sync state when initialCategory changes or modal opens
+    useEffect(() => {
+        if (open) {
+            setSelectedCategory(initialCategory || defaultCategory);
+        }
+    }, [open, initialCategory, defaultCategory]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,7 +61,14 @@ export function ExternalIncomeModal({ open, onClose, onSave, categories, initial
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4">
-                    <h2 className="text-headline">Ingreso Extra</h2>
+                    <div>
+                        <h2 className="text-headline">Ingreso Extra</h2>
+                        {selectedCategory && (
+                            <p className="text-sm text-muted-foreground">
+                                Hacia: <strong className="text-primary">{categories.find(c => c.id === selectedCategory)?.nameEs}</strong>
+                            </p>
+                        )}
+                    </div>
                     <button onClick={handleClose} className="p-2 hover:bg-muted rounded-full transition-colors">
                         <X className="w-5 h-5" />
                     </button>
@@ -99,33 +113,35 @@ export function ExternalIncomeModal({ open, onClose, onSave, categories, initial
                             </div>
                         </div>
 
-                        {/* Category Selection Carousel */}
-                        <div>
-                            <label className="text-label mb-3 block">¿A dónde irá el dinero?</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {categories.map(cat => (
-                                    <button
-                                        key={cat.id}
-                                        type="button"
-                                        onClick={() => setSelectedCategory(cat.id)}
-                                        className={cn(
-                                            "flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 h-24",
-                                            selectedCategory === cat.id
-                                                ? "bg-primary/5 border-primary text-primary shadow-sm"
-                                                : "bg-card border-border hover:bg-muted/50 text-muted-foreground"
-                                        )}
-                                    >
-                                        <div className={cn(
-                                            "w-8 h-8 rounded-full flex items-center justify-center",
-                                            selectedCategory === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
-                                        )}>
-                                            <ArrowDownCircle className="w-4 h-4" />
-                                        </div>
-                                        <span className="text-xs font-medium text-center leading-tight">{cat.nameEs}</span>
-                                    </button>
-                                ))}
+                        {/* Category Selection Carousel - Only show if no initial category is forced */}
+                        {!initialCategory && (
+                            <div>
+                                <label className="text-label mb-3 block">¿A dónde irá el dinero?</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {categories.map(cat => (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => setSelectedCategory(cat.id)}
+                                            className={cn(
+                                                "flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 h-24",
+                                                selectedCategory === cat.id
+                                                    ? "bg-primary/5 border-primary text-primary shadow-sm"
+                                                    : "bg-card border-border hover:bg-muted/50 text-muted-foreground"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "w-8 h-8 rounded-full flex items-center justify-center",
+                                                selectedCategory === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                                            )}>
+                                                <ArrowDownCircle className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-xs font-medium text-center leading-tight">{cat.nameEs}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                     </div>
 

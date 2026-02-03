@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Trash2, X, Receipt, Fuel } from 'lucide-react';
-import { Expense, BudgetCategory, Goal, PeriodicExpense } from '@/hooks/useBudget';
+import { Expense, BudgetCategory, Goal, PeriodicExpense, Loan } from '@/hooks/useBudget';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -106,8 +106,8 @@ export function ExpenseFormModal({
 
   const handleCategoryChange = (value: string) => {
     setCategoryId(value);
-
     const cat = categories.find(c => c.id === value);
+
     if (cat) {
       setCategoryType(cat.type as any);
     } else if (goals.some(g => g.id === value)) setCategoryType('goal');
@@ -174,8 +174,26 @@ export function ExpenseFormModal({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectLabel>Presupuesto Base</SelectLabel>
-                      {categories.map(cat => (
+                      <SelectLabel>Gastos Variables</SelectLabel>
+                      {categories.filter(c => c.slug === 'variable').map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.nameEs} ({formatCurrency(cat.amount)})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+
+                    <SelectGroup>
+                      <SelectLabel>Gastos Fijos</SelectLabel>
+                      {categories.filter(c => c.slug === 'fixed').map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.nameEs} ({formatCurrency(cat.amount)})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+
+                    <SelectGroup>
+                      <SelectLabel>Gastos de Ahorro</SelectLabel>
+                      {categories.filter(c => c.slug === 'savings').map(cat => (
                         <SelectItem key={cat.id} value={cat.id}>
                           {cat.nameEs} ({formatCurrency(cat.amount)})
                         </SelectItem>
@@ -203,6 +221,8 @@ export function ExpenseFormModal({
                         ))}
                       </SelectGroup>
                     )}
+
+
                   </SelectContent>
                 </Select>
               </div>

@@ -29,19 +29,28 @@ export function FixedBillsSection({
 
   // Derive current fortnight for display logic
   const currentDay = new Date().getDate();
-  const currentFortnight = currentDay <= 15 ? 1 : 2;
+  // User Rules: Q1 (15-29), Q2 (30-14)
+  const currentFortnight = (currentDay >= 15 && currentDay <= 29) ? 1 : 2;
 
   // Calculate strict total for THIS fortnight active bills only
   const totalBillsPerFortnight = bills.reduce((sum, bill) => {
-    // Logic matches useBudget:
-    // If specific fortnight (1 or 2), only add FULL amount if matches current
-    // If monthly (null/both), add HALF amount
-    // eslint-disable-next-line eqeqeq
-    if (bill.fortnight == 1 || bill.fortnight == 2) {
-      // eslint-disable-next-line eqeqeq
-      if (bill.fortnight != currentFortnight) return sum;
+    // 1. Priority: Specific Fortnight Assignment
+    // Safely handle string/number mismatch
+    const billFortnight = Number(bill.fortnight);
+
+    if (billFortnight === 1 || billFortnight === 2) {
+      if (billFortnight === currentFortnight) {
+        return sum + bill.amount;
+      }
+      return sum; // Skip if not matching fortnight
+    }
+
+    // 2. Frequency Fallback
+    if (bill.frequency === 'biweekly') {
       return sum + bill.amount;
     }
+
+    // Default: Monthly Split (Paid in both, split total)
     return sum + (bill.amount / 2);
   }, 0);
 
@@ -62,20 +71,28 @@ export function FixedBillsSection({
 
   return (
     <div className="space-y-4">
-      {/* Comparison Bar */}
-      <BudgetComparisonBar
-        budgetAmount={fixedCategory.amount}
-        actualAmount={totalCommitted}
-        label="Uso del presupuesto fijo (Facturas + Préstamos)"
-      />
-
-      {/* Info Banner */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
-        <div className="flex items-center gap-1.5">
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Mostrando actividad para la <strong className="text-foreground">{currentFortnight}ª Quincena</strong></span>
+      {/* Header Summary Card */}
+      <div className="bg-gradient-to-br from-fixed-light/20 to-fixed-light/5 p-6 rounded-3xl border border-fixed/10 space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-fixed-dark mb-1">Presupuesto Fijo</h2>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="w-4 h-4" />
+              <span>Actividad: <strong className="text-foreground">{currentFortnight}ª Quincena</strong></span>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Total a Pagar</p>
+            <p className="text-2xl font-bold text-fixed-dark">{formatCurrency(totalCommitted)}</p>
+          </div>
         </div>
-        <span>Total a pagar: <strong className="text-foreground">{formatCurrency(totalCommitted)}</strong></span>
+
+        {/* Progress Bar Component Integration */}
+        <BudgetComparisonBar
+          budgetAmount={fixedCategory.amount}
+          actualAmount={totalCommitted}
+          label="Uso del presupuesto"
+        />
       </div>
 
       {/* Bills List */}

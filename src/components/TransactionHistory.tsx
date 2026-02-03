@@ -4,6 +4,7 @@ import { es } from 'date-fns/locale';
 import { Trash2, Receipt, ShoppingBag, Home, Wallet, Target, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { cn } from '@/lib/utils';
 import type { Expense, BudgetCategory, Goal, PeriodicExpense } from '@/hooks/useBudget';
@@ -144,11 +145,26 @@ export function TransactionHistory({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">
+                  <div className="flex gap-2">
+                    <Badge variant={
+                      expense.categoryType === 'fixed' ? 'fixed' :
+                        expense.categoryType === 'savings' ? 'savings' :
+                          expense.categoryType === 'variable' ? 'variable' :
+                            'secondary'
+                    } className="h-5 px-2 text-[10px] uppercase tracking-wider font-bold">
+                      {expense.categoryType === 'fixed' && 'Fijos'}
+                      {expense.categoryType === 'variable' && 'Ocio'}
+                      {expense.categoryType === 'savings' && 'Ahorro'}
+                      {expense.categoryType === 'periodic' && 'Periódico'}
+                      {expense.categoryType === 'goal' && 'Meta'}
+                      {!['fixed', 'variable', 'savings', 'periodic', 'goal'].includes(expense.categoryType) && 'Otro'}
+                    </Badge>
+                  </div>
+                  <p className="font-medium truncate mt-0.5">
                     {expense.description || getCategoryName(expense)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {getCategoryName(expense)} • {format(expense.date, "d 'de' MMMM", { locale: es })}
+                    {format(expense.date, "d 'de' MMMM", { locale: es })}
                   </p>
                 </div>
 
