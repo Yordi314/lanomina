@@ -25,6 +25,7 @@ interface TransactionHistoryProps {
   goals: Goal[];
   periodicExpenses: PeriodicExpense[];
   onDeleteExpense: (id: string) => void;
+  onEditExpense: (expense: Expense) => void;
 }
 
 type FilterType = 'all' | 'current-month' | 'current-fortnight' | 'fixed' | 'savings' | 'variable';
@@ -56,7 +57,8 @@ export function TransactionHistory({
   categories,
   goals,
   periodicExpenses,
-  onDeleteExpense
+  onDeleteExpense,
+  onEditExpense
 }: TransactionHistoryProps) {
   const [filter, setFilter] = useState<FilterType>('all');
 
@@ -154,31 +156,42 @@ export function TransactionHistory({
                   -{formatCurrency(expense.amount)}
                 </span>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>¿Eliminar este gasto?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Se reembolsará {formatCurrency(expense.amount)} a la categoría "{getCategoryName(expense)}".
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => onDeleteExpense(expense.id)}>
-                        Eliminar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => onEditExpense(expense)}
+                  >
+                    <Receipt className="w-4 h-4" /> {/* Or Pencil/Edit icon if imported */}
+                  </Button>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar este gasto?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Se reembolsará {formatCurrency(expense.amount)} a la categoría "{getCategoryName(expense)}".
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => onDeleteExpense(expense.id)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             );
           })}

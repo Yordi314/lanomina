@@ -10,16 +10,20 @@ interface ExpenseFormModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (expense: Omit<Expense, 'id'>) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<Expense, 'id'>>, oldExpense: Expense) => void;
+  expenseToEdit?: Expense | null;
   categories: BudgetCategory[];
   goals: Goal[];
   periodicExpenses: PeriodicExpense[];
-  gasAvailable?: number; // Optional prop for Gas display
+  gasAvailable?: number;
 }
 
 export function ExpenseFormModal({
   open,
   onClose,
   onSave,
+  onUpdate,
+  expenseToEdit,
   categories,
   goals,
   periodicExpenses,
@@ -31,28 +35,45 @@ export function ExpenseFormModal({
   const [categoryType, setCategoryType] = useState<Expense['categoryType']>('variable');
   const [isGas, setIsGas] = useState(false);
 
-  // Reset form when opened
+  // Reset form when opened or expenseToEdit changes
   useEffect(() => {
     if (open) {
-      setDescription('');
-      setAmount('');
-      const defaultCat = categories.find(c => c.slug === 'variable')?.id || '';
-      setCategoryId(defaultCat);
-      setCategoryType('variable');
-      setIsGas(false);
+      if (expenseToEdit) {
+        // Edit Mode
+        setDescription(expenseToEdit.description || '');
+        setAmount(expenseToEdit.amount.toString());
+        setCategoryId(expenseToEdit.categoryId);
+        setCategoryType(expenseToEdit.categoryType);
+        setIsGas(expenseToEdit.isGas || false);
+      } else {
+        // Create Mode
+        setDescription('');
+        setAmount('');
+        const defaultCat = categories.find(c => c.slug === 'variable')?.id || '';
+        setCategoryId(defaultCat);
+        setCategoryType('variable');
+        setIsGas(false);
+      }
     }
-  }, [open, categories]);
+  }, [open, expenseToEdit, categories]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      date: new Date(),
+    const expenseData = {
+      date: expenseToEdit ? expenseToEdit.date : new Date(), // Keep original date if editing
       amount: parseFloat(amount),
       categoryId,
-      categoryType: isGas ? 'fixed' : categoryType, // Gas always comes from Fixed budget conceptually in logic, but we track it separately too
+      categoryType: isGas ? 'fixed' : categoryType,
       description,
       isGas,
-    });
+    };
+
+    if (expenseToEdit && onUpdate) {
+      onUpdate(expenseToEdit.id, expenseData, expenseToEdit);
+    } else {
+      onSave(expenseData);
+    }
+
     onClose();
   };
 
@@ -61,6 +82,9 @@ export function ExpenseFormModal({
   const selectedPeriodic = periodicExpenses.find(p => p.id === categoryId);
 
   // Logic to determine max amount based on selection
+  // Note: If Editing, we must add back the current expenses amount to the available logic 
+  // correctly, OR (simpler) effectively ignore the limit or add the current amount to the limit.
+  // For simplicity, let's just add the current expense amount to the theoretical limit if we are editing the SAME category
   let maxAmount = 0;
   if (isGas) {
     maxAmount = gasAvailable;
@@ -71,6 +95,14 @@ export function ExpenseFormModal({
   } else if (selectedPeriodic) {
     maxAmount = selectedPeriodic.currentAmount;
   }
+
+  // If editing and we stayed in the same bucket, we technically 'have' the funds we already spent.
+  if (expenseToEdit) {
+    if (isGas && expenseToEdit.isGas) maxAmount += expenseToEdit.amount;
+    else if (selectedCategory && expenseToEdit.categoryId === selectedCategory.id) maxAmount += expenseToEdit.amount;
+    else if (selectedGoal && expenseToEdit.categoryId === selectedGoal.id) maxAmount += expenseToEdit.amount;
+  }
+
 
   const handleCategoryChange = (value: string) => {
     setCategoryId(value);
@@ -100,7 +132,7 @@ export function ExpenseFormModal({
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4">
-          <h2 className="text-headline">Registrar Gasto</h2>
+          <h2 className="text-headline">{expenseToEdit ? 'Editar Gasto' : 'Registrar Gasto'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -225,7 +257,7 @@ export function ExpenseFormModal({
             className="w-full h-12 text-lg rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
             disabled={!amount || !description || parseFloat(amount) > maxAmount}
           >
-            Registrar Gasto
+            {expenseToEdit ? 'Actualizar Gasto' : 'Registrar Gasto'}
           </Button>
         </form>
 

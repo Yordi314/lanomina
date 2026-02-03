@@ -12,16 +12,31 @@ import { ExpenseFormModal } from './ExpenseFormModal';
 import { LoanFormModal } from './LoanFormModal';
 import { SurplusCard } from './SurplusCard';
 import { ExternalIncomeModal } from './ExternalIncomeModal';
+import { IncomeEditModal } from './IncomeEditModal';
 import { FixedBillsSection } from './FixedBillsSection';
 import { LoansSection } from './LoansSection';
 import { TransactionHistory } from './TransactionHistory';
+
+import { GasCard } from './GasCard';
 import { SettingsSheet } from './SettingsSheet';
-import { useBudget, Goal, PeriodicExpense, Loan } from '@/hooks/useBudget';
+import { useBudget, Goal, PeriodicExpense, Loan, Expense, Income } from '@/hooks/useBudget';
 import {
   User, Target, CalendarClock, ChevronRight, Plus,
   LayoutDashboard, Wallet, ArrowRightLeft, History,
-  Settings, Receipt, Home, CreditCard, Menu, Loader2, LogOut
+  Settings, Receipt, Home, CreditCard, Menu, Loader2, LogOut,
+  Pencil, Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { MobileNavSheet } from './MobileNavSheet';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -30,7 +45,7 @@ import { useAuth } from '@/context/AuthContext';
 
 
 type SheetType = 'actions' | 'income' | 'transfer' | 'settings' | 'external-income' | null;
-type ModalType = 'goal' | 'periodic' | 'expense' | 'loan' | null;
+type ModalType = 'goal' | 'periodic' | 'expense' | 'loan' | 'income-edit' | null;
 type TabType = 'overview' | 'goals' | 'periodic' | 'fixed-bills' | 'loans' | 'history' | 'transactions';
 
 const navItems = [
@@ -51,6 +66,10 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<PeriodicExpense | null>(null);
+
+  // New States for Editing
+  const [selectedTransaction, setSelectedTransaction] = useState<Expense | null>(null);
+  const [selectedIncome, setSelectedIncome] = useState<Income | null>(null);
 
   const [externalIncomeCategory, setExternalIncomeCategory] = useState<string | undefined>(undefined);
 
@@ -89,6 +108,11 @@ export function Dashboard() {
   const handleAddFunds = (categoryId: string) => {
     setExternalIncomeCategory(categoryId);
     setActiveSheet('external-income');
+  };
+
+  const handleGasCardClick = () => {
+    setSelectedTransaction(null); // Clear edit state
+    setActiveModal('expense');
   };
 
   const handleIncomeSubmit = (data: {
@@ -143,6 +167,28 @@ export function Dashboard() {
     }
   };
 
+  // Transaction Edit Handlers
+  const handleEditTransaction = (expense: Expense) => {
+    setSelectedTransaction(expense);
+    setActiveModal('expense');
+  };
+
+  const handleCloseTransactionModal = () => {
+    setActiveModal(null);
+    setSelectedTransaction(null);
+  };
+
+  // Income Edit Handlers
+  const handleEditIncome = (income: Income) => {
+    setSelectedIncome(income);
+    setActiveModal('income-edit');
+  };
+
+  const handleCloseIncomeModal = () => {
+    setActiveModal(null);
+    setSelectedIncome(null);
+  }
+
   const upcomingExpenses = budget.periodicExpenses
     .filter(e => e.currentAmount < e.targetAmount)
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
@@ -151,7 +197,7 @@ export function Dashboard() {
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card flex-shrink-0 hidden lg:flex flex-col">
+      <aside className="w-64 border-r border-border bg-card flex-shrink-0 hidden lg:flex flex-col h-screen sticky top-0">
         {/* Logo */}
         <div className="p-6 border-b border-border">
           <h1 className="text-xl font-semibold tracking-tight">
@@ -160,7 +206,7 @@ export function Dashboard() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 overflow-y-auto">
+        <nav className="flex-1 p-4 overflow-y-auto no-scrollbar">
           <ul className="space-y-1">
             {navItems.map(item => {
               const Icon = item.icon;
@@ -187,7 +233,7 @@ export function Dashboard() {
         {/* Quick Actions */}
         <div className="p-4 border-t border-border space-y-2">
           <Button
-            onClick={() => setActiveModal('expense')}
+            onClick={() => { setSelectedTransaction(null); setActiveModal('expense'); }}
             className="w-full justify-start gap-3"
             variant="default"
           >
@@ -243,7 +289,7 @@ export function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto no-scrollbar">
         {/* Mobile Header */}
         <header className="lg:hidden px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
@@ -304,7 +350,7 @@ export function Dashboard() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <Button onClick={() => setActiveModal('expense')} size="lg" className="gap-2">
+                    <Button onClick={() => { setSelectedTransaction(null); setActiveModal('expense'); }} size="lg" className="gap-2">
                       <Receipt className="w-4 h-4" />
                       Registrar Gasto
                     </Button>
@@ -329,10 +375,23 @@ export function Dashboard() {
                 />
               )}
 
+
+
+
+
               {/* Budget Pillars - Grid for desktop */}
               <section>
                 <h2 className="text-label mb-4">Distribución del Presupuesto</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Gas Card Integrated */}
+                  {/* Gas Card Integrated */}
+                  <GasCard
+                    available={budget.gasAvailable}
+                    spent={budget.totalGasExpenses}
+                    totalIncome={budget.totalGasIncome}
+                    onClick={handleGasCardClick}
+                  />
+
                   {budget.categories.map(category => (
                     <BudgetCard
                       key={category.id}
@@ -580,7 +639,7 @@ export function Dashboard() {
                   <h2 className="text-headline">Movimientos</h2>
                   <p className="text-caption">Historial de todos tus gastos</p>
                 </div>
-                <Button onClick={() => setActiveModal('expense')} className="gap-2">
+                <Button onClick={() => { setSelectedTransaction(null); setActiveModal('expense'); }} className="gap-2">
                   <Plus className="w-4 h-4" />
                   Nuevo Gasto
                 </Button>
@@ -592,6 +651,7 @@ export function Dashboard() {
                 goals={budget.goals}
                 periodicExpenses={budget.periodicExpenses}
                 onDeleteExpense={budget.deleteExpense}
+                onEditExpense={handleEditTransaction}
               />
             </div>
           )}
@@ -608,7 +668,7 @@ export function Dashboard() {
               {budget.incomeHistory.length > 0 ? (
                 <div className="card-soft divide-y divide-border">
                   {budget.incomeHistory.map(income => (
-                    <div key={income.id} className="p-4 flex items-center justify-between">
+                    <div key={income.id} className="p-4 flex items-center justify-between group">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-savings-light flex items-center justify-center">
                           <Wallet className="w-5 h-5 text-savings" />
@@ -624,9 +684,49 @@ export function Dashboard() {
                           </p>
                         </div>
                       </div>
-                      <span className="text-lg font-semibold text-savings">
-                        +{formatCurrency(income.amount)}
-                      </span>
+
+                      <div className="flex items-center gap-4">
+                        <span className="text-lg font-semibold text-savings">
+                          +{formatCurrency(income.amount)}
+                        </span>
+
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
+                            onClick={() => handleEditIncome(income)}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar este ingreso?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esto eliminará el registro del historial. <strong>No ajustará los balances actuales</strong> (Ahorro, Fijo, Variable).
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => budget.deleteIncome(income.id)}>
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -739,12 +839,21 @@ export function Dashboard() {
 
       <ExpenseFormModal
         open={activeModal === 'expense'}
-        onClose={() => setActiveModal(null)}
+        onClose={handleCloseTransactionModal}
         onSave={budget.addExpense}
+        onUpdate={budget.updateExpense}
+        expenseToEdit={selectedTransaction}
         categories={budget.categories}
         goals={budget.goals}
         periodicExpenses={budget.periodicExpenses}
         gasAvailable={budget.gasAvailable}
+      />
+
+      <IncomeEditModal
+        open={activeModal === 'income-edit'}
+        onClose={handleCloseIncomeModal}
+        onSave={budget.updateIncome}
+        income={selectedIncome}
       />
     </div >
   );

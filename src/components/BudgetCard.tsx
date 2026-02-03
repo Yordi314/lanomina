@@ -11,21 +11,41 @@ interface BudgetCardProps {
   onAddFunds?: () => void;
 }
 
+import { Home, PiggyBank, Wallet, Snowflake, Sparkles, ChevronRight } from 'lucide-react';
+
 const categoryStyles = {
   fixed: {
-    bg: 'bg-fixed-light',
-    text: 'text-fixed',
-    accent: 'bg-fixed',
+    bg: 'bg-slate-50',
+    border: 'border-slate-100/50',
+    iconBg: 'bg-slate-100',
+    iconColor: 'text-slate-600',
+    text: 'text-slate-900',
+    subtext: 'text-slate-600',
+    barBg: 'bg-slate-200/50',
+    barFill: 'bg-slate-600',
+    Icon: Home
   },
   savings: {
-    bg: 'bg-savings-light',
-    text: 'text-savings',
-    accent: 'bg-savings',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-100/50',
+    iconBg: 'bg-emerald-100',
+    iconColor: 'text-emerald-600',
+    text: 'text-emerald-900',
+    subtext: 'text-emerald-600',
+    barBg: 'bg-emerald-200/50',
+    barFill: 'bg-emerald-500',
+    Icon: PiggyBank
   },
   variable: {
-    bg: 'bg-variable-light',
-    text: 'text-variable',
-    accent: 'bg-variable',
+    bg: 'bg-amber-50',
+    border: 'border-amber-100/50',
+    iconBg: 'bg-amber-100',
+    iconColor: 'text-amber-600',
+    text: 'text-amber-900',
+    subtext: 'text-amber-600',
+    barBg: 'bg-amber-200/50',
+    barFill: 'bg-amber-500',
+    Icon: Wallet
   },
 };
 
@@ -35,22 +55,36 @@ const categoryLabels = {
   variable: 'Disponible',
 };
 
+const groupLabels = {
+  fixed: 'Presupuesto Fijo',
+  savings: 'Fondo de Ahorro',
+  variable: 'Presupuesto Ocio',
+};
+
 export function BudgetCard({ category, totalBudget, availableAmount, onClick, onAddFunds }: BudgetCardProps) {
   const styles = categoryStyles[category.type];
   const label = categoryLabels[category.type];
+  const groupLabel = groupLabels[category.type];
   const percentage = totalBudget > 0 ? (category.amount / totalBudget) * 100 : 0;
+  const Icon = styles.Icon;
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        'w-full p-5 rounded-3xl text-left transition-all duration-200 cursor-pointer relative group',
-        'hover:scale-[1.02] hover:shadow-soft-lg active:scale-[0.98]',
-        styles.bg
+        'w-full p-5 rounded-3xl transition-all duration-200 cursor-pointer relative group overflow-hidden border',
+        'hover:shadow-soft-lg',
+        styles.bg,
+        styles.border
       )}
     >
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-label">{category.nameEs}</span>
+      {/* Background Pattern */}
+      <div className={cn("absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none opacity-40", styles.iconBg)} />
+
+      <div className="flex items-center justify-between mb-4 relative z-10">
+        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform", styles.iconBg, styles.iconColor)}>
+          <Icon className="w-6 h-6" />
+        </div>
         <div className="flex items-center gap-2">
           {onAddFunds && (
             <button
@@ -59,41 +93,48 @@ export function BudgetCard({ category, totalBudget, availableAmount, onClick, on
                 onAddFunds();
               }}
               className={cn(
-                "p-1.5 rounded-full bg-white/30 hover:bg-white/80 transition-colors shadow-sm",
-                styles.text
+                "p-1.5 rounded-full bg-white/50 hover:bg-white/80 transition-colors shadow-sm",
+                styles.iconColor
               )}
               title="Ingresar fondos"
             >
-              <Plus className="w-3.5 h-3.5" strokeWidth={3} />
+              <Plus className="w-4 h-4" strokeWidth={3} />
             </button>
           )}
-          <span className={cn('text-xs font-medium', styles.text)}>
-            {category.percentage}%
-          </span>
+          {onClick && (
+            <div className="w-8 h-8 rounded-full bg-white/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <ChevronRight className={cn("w-4 h-4", styles.iconColor)} />
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="mb-3">
-        <span className={cn('text-2xl font-semibold tracking-tight', styles.text)}>
-          {formatCurrency(category.amount)}
-        </span>
-      </div>
-
-      {/* Progress bar */}
-      <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
-        <div
-          className={cn('h-full rounded-full transition-all duration-500', styles.accent)}
-          style={{ width: `${Math.min(percentage, 100)}%` }}
-        />
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-caption">
-        <span>{label}</span>
-        {availableAmount !== undefined && (
-          <span className="font-medium opacity-80">
-            {formatCurrency(availableAmount)}
+      <div className="relative z-10">
+        <div className="flex justify-between items-end mb-1">
+          <p className={cn("text-sm font-medium opacity-80", styles.subtext)}>{groupLabel}</p>
+          <span className={cn('text-xs font-medium', styles.subtext)}>
+            {category.percentage}%
           </span>
-        )}
+        </div>
+
+        <h3 className={cn("text-2xl font-bold tracking-tight", styles.text)}>
+          {formatCurrency(category.amount)}
+        </h3>
+
+        <div className={cn("mt-4 flex items-center justify-between text-xs font-medium opacity-60", styles.subtext)}>
+          <span>{label}</span>
+          {availableAmount !== undefined && (
+            <span>{formatCurrency(availableAmount)}</span>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        <div className={cn("mt-2 h-2 w-full rounded-full overflow-hidden", styles.barBg)}>
+          <div
+            className={cn('h-full rounded-full transition-all duration-500', styles.barFill)}
+            style={{ width: `${Math.min(percentage, 100)}%` }}
+          />
+        </div>
       </div>
     </div>
   );

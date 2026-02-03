@@ -222,11 +222,8 @@ export function useBudget() {
 
       // 2. Update Categories
       if (income.includesGas) {
-        // Find 'fixed' category
-        const fixedCat = categories.find(c => c.slug === 'fixed');
-        if (fixedCat) {
-          await supabase.from('categories').update({ amount: fixedCat.amount + income.amount }).eq('id', fixedCat.id);
-        }
+        // Gas income is ISOLATED. It stays in 'incomes' table to be summed for gasAvailable,
+        // but it is NOT added to any Category balance (Fixed, etc).
       } else {
         // Distribute
         const fixedCat = categories.find(c => c.slug === 'fixed');
@@ -421,6 +418,7 @@ export function useBudget() {
   });
 
 
+
   // Expenses
   const addExpenseMutation = useMutation({
     mutationFn: async (expense: Omit<Expense, 'id'>) => {
@@ -435,16 +433,18 @@ export function useBudget() {
         is_gas: expense.isGas
       });
 
-      // 2. Deduct from Source
-      if (['fixed', 'savings', 'variable'].includes(expense.categoryType)) {
-        const cat = categories.find(c => c.id === expense.categoryId);
-        if (cat) await supabase.from('categories').update({ amount: Math.max(0, cat.amount - expense.amount) }).eq('id', cat.id);
-      } else if (expense.categoryType === 'goal') {
-        const goal = goals.find(g => g.id === expense.categoryId);
-        if (goal) await supabase.from('goals').update({ current_amount: Math.max(0, goal.currentAmount - expense.amount) }).eq('id', goal.id);
-      } else if (expense.categoryType === 'periodic') {
-        const p = periodicExpenses.find(pe => pe.id === expense.categoryId);
-        if (p) await supabase.from('periodic_expenses').update({ current_amount: Math.max(0, p.currentAmount - expense.amount) }).eq('id', p.id);
+      // 2. Deduct from Source (ONLY if not Gas)
+      if (!expense.isGas) {
+        if (['fixed', 'savings', 'variable'].includes(expense.categoryType)) {
+          const cat = categories.find(c => c.id === expense.categoryId);
+          if (cat) await supabase.from('categories').update({ amount: Math.max(0, cat.amount - expense.amount) }).eq('id', cat.id);
+        } else if (expense.categoryType === 'goal') {
+          const goal = goals.find(g => g.id === expense.categoryId);
+          if (goal) await supabase.from('goals').update({ current_amount: Math.max(0, goal.currentAmount - expense.amount) }).eq('id', goal.id);
+        } else if (expense.categoryType === 'periodic') {
+          const p = periodicExpenses.find(pe => pe.id === expense.categoryId);
+          if (p) await supabase.from('periodic_expenses').update({ current_amount: Math.max(0, p.currentAmount - expense.amount) }).eq('id', p.id);
+        }
       }
     },
     onSuccess: () => {
@@ -453,6 +453,95 @@ export function useBudget() {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
       queryClient.invalidateQueries({ queryKey: ['periodicExpenses'] });
       toast({ title: "Gasto registrado" });
+    }
+  });
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: async ({ id, updates, oldExpense }: { id: string, updates: Partial<Omit<Expense, 'id'>>, oldExpense: Expense }) => {
+      // 1. Revert Old Expense impact (ONLY if not Gas)
+      if (!oldExpense.isGas) {
+        if (['fixed', 'savings', 'variable'].includes(oldExpense.categoryType)) {
+          const cat = categories.find(c => c.id === oldExpense.categoryId);
+          if (cat) await supabase.from('categories').update({ amount: cat.amount + oldExpense.amount }).eq('id', cat.id);
+        } else if (oldExpense.categoryType === 'goal') {
+          const goal = goals.find(g => g.id === oldExpense.categoryId);
+          if (goal) await supabase.from('goals').update({ current_amount: goal.currentAmount + oldExpense.amount }).eq('id', goal.id);
+        } else if (oldExpense.categoryType === 'periodic') {
+          const p = periodicExpenses.find(pe => pe.id === oldExpense.categoryId);
+          if (p) await supabase.from('periodic_expenses').update({ current_amount: p.currentAmount + oldExpense.amount }).eq('id', p.id);
+        }
+      }
+
+      // 2. Calculate new values
+      const newAmount = updates.amount ?? oldExpense.amount;
+      const newCategoryId = updates.categoryId ?? oldExpense.categoryId;
+      const newCategoryType = updates.categoryType ?? oldExpense.categoryType;
+
+      // 3. Update expense record
+      const payload: any = {};
+      if (updates.date) payload.date = updates.date.toISOString();
+      if (updates.amount !== undefined) payload.amount = updates.amount;
+      if (updates.categoryId) payload.category_id = updates.categoryId;
+      if (updates.categoryType) payload.category_type = updates.categoryType;
+      if (updates.description) payload.description = updates.description;
+      if (updates.isGas !== undefined) payload.is_gas = updates.isGas;
+
+      await supabase.from('expenses').update(payload).eq('id', id);
+
+      // 4. Apply New Expense impact
+      // We need to fetch the LATEST data to ensure we don't overwrite concurrent changes, 
+      // but for simplicity in this user-context, we'll re-fetch category/goal from current state 
+      // OR ideally we should refetch them. 
+      // BETTER: We just add the revert and the new deduct directly to the DB.
+      // However, since we did the revert above, we can now "Deduct" the new amount.
+
+      // Note: The "Revert" above might have updated the 'categories' state in DB. 
+      // The 'categories' variable here is stale compared to the DB state after step 1.
+      // BUT, supabase.from('categories').update... increments/decrements are best done with rpc or careful reads.
+      // Here we are doing read-modify-write. It risks race conditions but is consistent with the rest of this file.
+      // To be safer, we should re-find the category to get its conceptual "base", but really we need to trust the sequence.
+
+      // Limitation: We are using "categories" from render scope. If we just updated it in Step 1, "categories" variable is OLD.
+      // We must re-fetch or use a delta query. 
+      // Hack fix: We can assume we need to apply the NET difference if category is same, or full move if different.
+      // BUT complication: Category might change.
+
+      // Alternative: Do it in SQL or just endure the stale state for a split second (user won't notice unless rapid fire).
+      // Actually, the Revert Step 1 updates the DB.
+      // The Apply Step 4 needs to know the CURRENT balance in DB to subtract from.
+      // We can fetch it.
+
+      let targetAmount = 0;
+      let table = '';
+
+      if (['fixed', 'savings', 'variable'].includes(newCategoryType)) {
+        table = 'categories';
+        const { data } = await supabase.from('categories').select('amount').eq('id', newCategoryId).single();
+        if (data) targetAmount = data.amount;
+      } else if (newCategoryType === 'goal') {
+        table = 'goals';
+        const { data } = await supabase.from('goals').select('current_amount').eq('id', newCategoryId).single();
+        if (data) targetAmount = data.current_amount;
+      } else if (newCategoryType === 'periodic') {
+        table = 'periodic_expenses';
+        const { data } = await supabase.from('periodic_expenses').select('current_amount').eq('id', newCategoryId).single();
+        if (data) targetAmount = data.current_amount;
+      }
+
+      const newIsGas = updates.isGas !== undefined ? updates.isGas : oldExpense.isGas;
+
+      if (!newIsGas && table) {
+        const col = table === 'categories' ? 'amount' : 'current_amount';
+        await supabase.from(table).update({ [col]: Math.max(0, targetAmount - newAmount) }).eq('id', newCategoryId);
+      }
+
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['periodicExpenses'] });
+      toast({ title: "Gasto actualizado" });
     }
   });
 
@@ -465,15 +554,18 @@ export function useBudget() {
       await supabase.from('expenses').delete().eq('id', expenseId);
 
       // 2. Refund Source
-      if (['fixed', 'savings', 'variable'].includes(expense.categoryType)) {
-        const cat = categories.find(c => c.id === expense.categoryId);
-        if (cat) await supabase.from('categories').update({ amount: cat.amount + expense.amount }).eq('id', cat.id);
-      } else if (expense.categoryType === 'goal') {
-        const goal = goals.find(g => g.id === expense.categoryId);
-        if (goal) await supabase.from('goals').update({ current_amount: goal.currentAmount + expense.amount }).eq('id', goal.id);
-      } else if (expense.categoryType === 'periodic') {
-        const p = periodicExpenses.find(pe => pe.id === expense.categoryId);
-        if (p) await supabase.from('periodic_expenses').update({ current_amount: p.currentAmount + expense.amount }).eq('id', p.id);
+      // 2. Refund Source (ONLY if not Gas)
+      if (!expense.isGas) {
+        if (['fixed', 'savings', 'variable'].includes(expense.categoryType)) {
+          const cat = categories.find(c => c.id === expense.categoryId);
+          if (cat) await supabase.from('categories').update({ amount: cat.amount + expense.amount }).eq('id', cat.id);
+        } else if (expense.categoryType === 'goal') {
+          const goal = goals.find(g => g.id === expense.categoryId);
+          if (goal) await supabase.from('goals').update({ current_amount: goal.currentAmount + expense.amount }).eq('id', goal.id);
+        } else if (expense.categoryType === 'periodic') {
+          const p = periodicExpenses.find(pe => pe.id === expense.categoryId);
+          if (p) await supabase.from('periodic_expenses').update({ current_amount: p.currentAmount + expense.amount }).eq('id', p.id);
+        }
       }
     },
     onSuccess: () => {
@@ -484,6 +576,35 @@ export function useBudget() {
       toast({ title: "Gasto eliminado" });
     }
   });
+
+  // Income Mutations
+  const updateIncomeMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string, updates: Partial<Omit<Income, 'id'>> }) => {
+      const payload: any = {};
+      if (updates.date) payload.date = updates.date.toISOString();
+      if (updates.concept) payload.concept = updates.concept;
+      if (updates.amount) payload.amount = updates.amount;
+
+      // Note: We are NOT adjusting categories here because we don't know the original distribution
+      await supabase.from('incomes').update(payload).eq('id', id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incomes'] });
+      toast({ title: "Ingreso actualizado", description: "El balance no se ha ajustado automáticamente." });
+    }
+  });
+
+  const deleteIncomeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('incomes').delete().eq('id', id);
+      // Note: We are NOT adjusting categories here
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incomes'] });
+      toast({ title: "Ingreso eliminado", description: "El balance no se ha ajustado automáticamente." });
+    }
+  });
+
 
 
   // Calculations
@@ -518,13 +639,42 @@ export function useBudget() {
   }, [categories, getTotalFixedBills, getTotalLoansPayment]);
 
   const resetData = useCallback(async () => {
-    // Implement reset if needed, but it's dangerous with real DB
-    // Maybe just clear tables?
-  }, []);
+    if (!user) return;
+
+    try {
+      // 1. Delete transactional data
+      await supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      await supabase.from('incomes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // 2. Delete configuration data
+      await supabase.from('goals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('periodic_expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('fixed_bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('loans').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // 3. Reset Category Balances (Do NOT delete categories)
+      // We assume categories are shared/system or per-user. If per-user, we just update amounts.
+      const { data: userCategories } = await supabase.from('categories').select('id');
+      if (userCategories && userCategories.length > 0) {
+        const ids = userCategories.map(c => c.id);
+        await supabase.from('categories').update({ amount: 0 }).in('id', ids);
+      }
+
+      // 4. Refund UI state
+      queryClient.invalidateQueries();
+      toast({ title: "Sistema reiniciado", description: "Todos los datos han sido eliminados." });
+
+    } catch (error: any) {
+      console.error("Error resetting data:", error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudieron eliminar todos los datos." });
+    }
+  }, [user, queryClient, toast]);
 
   return {
     totalBalance,
     gasAvailable,
+    totalGasIncome,
+    totalGasExpenses,
     categories,
     goals,
     periodicExpenses,
@@ -561,7 +711,11 @@ export function useBudget() {
     deleteLoan: (id: string) => deleteLoanMutation.mutate(id),
 
     addExpense: (expense: Omit<Expense, 'id'>) => addExpenseMutation.mutate(expense),
+    updateExpense: (id: string, updates: Partial<Omit<Expense, 'id'>>, oldExpense: Expense) => updateExpenseMutation.mutate({ id, updates, oldExpense }),
     deleteExpense: (id: string) => deleteExpenseMutation.mutate(id),
+
+    updateIncome: (id: string, updates: Partial<Omit<Income, 'id'>>) => updateIncomeMutation.mutate({ id, updates }),
+    deleteIncome: (id: string) => deleteIncomeMutation.mutate(id),
 
     resetData,
 
